@@ -1,0 +1,49 @@
+{
+  "name": "Campaign Name",
+  "description": "Detailed campaign description that can be longer and include rich text",
+  "category": "Technology",
+  "imageUrl": "ipfs://QmYourCampaignImageCID",
+  "coverImageUrl": "ipfs://QmYourCampaignCoverImageCID",
+  "tags": ["blockchain", "defi", "education"],
+  "socialLinks": {
+    "website": "https://example.com",
+    "twitter": "https://twitter.com/example",
+    "discord": "https://discord.gg/example"
+  },
+  "creatorBio": "About the creator and their background",
+  "faq": [
+    {
+      "question": "How will funds be used?",
+      "answer": "Detailed explanation of fund allocation"
+    }
+  ],
+  "updates": [
+    {
+      "date": "2025-03-19T12:00:00Z",
+      "title": "Campaign Launch",
+      "content": "We're excited to launch our campaign today!"
+    }
+  ],
+  "createdAt": "2025-03-15T12:00:00Z",
+  "updatedAt": "2025-03-19T12:00:00Z"
+}
+{
+  "title": "Milestone Title",
+  "description": "Detailed milestone description",
+  "deliverables": [
+    "Feature implementation",
+    "Quality assurance",
+    "User testing"
+  ],
+  "estimatedDeliveryDate": "2025-06-15T12:00:00Z",
+  "evidenceRequired": "What the creator needs to provide to prove completion",
+  "risks": "Potential challenges and how they'll be addressed",
+  "updates": [
+    {
+      "date": "2025-04-01T12:00:00Z",
+      "content": "Progress update on this milestone"
+    }
+  ],
+  "createdAt": "2025-03-15T12:00:00Z",
+  "updatedAt": "2025-03-19T12:00:00Z"
+}
