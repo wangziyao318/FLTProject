@@ -62,6 +62,15 @@ contract Governance is Governor, GovernorSettings {
         fltToken = _fltToken;
     }
 
+    /**
+     * @notice Defines the quorum (minimum votes needed for a proposal to be valid).
+     * blockNumber Ignored in this simplified example.
+     * @return The quorum in FLT token units.
+     */
+    function quorum(uint256 /* blockNumber */) public pure override returns (uint256) {
+        return 1000e18; // Example: require a quorum of 1000 FLT tokens.
+    }
+
     // --- Overrides from Governor and GovernorSettings ---
 
     function proposalThreshold()
@@ -178,6 +187,4 @@ contract Governance is Governor, GovernorSettings {
         }
         return weight;
     }
-
-    function quorum(uint256 timepoint) public view override returns (uint256) {}
 }

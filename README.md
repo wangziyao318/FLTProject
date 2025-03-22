@@ -1,5 +1,21 @@
-# FLT
+# Crowdfunding dApp
 
+
+## Usage
+
+```sh
+nvm alias default lts/*
+
+nvm install --lts
+
+nvm use default
+
+npm install
+
+npx hardhat test
+```
+
+## FLT Token
 
 FLT - Fan Loyalty Token (no-transferable) == reputation
 
@@ -14,7 +30,7 @@ FLT - Fan Loyalty Token (no-transferable) == reputation
   - DEFAULT: when creators fail to complete milestones, or milestones not approved, or creators cancel their projects
 
 
-## ETH transactions
+## ETH Transactions
 
 #### normal transactions
 
@@ -36,18 +52,3 @@ FLT - Fan Loyalty Token (no-transferable) == reputation
 
 - voting power based on FLT
 
-
-
-## Usage
-
-```sh
-nvm alias default lts/*
-
-nvm install --lts
-
-nvm use default
-
-npm install --save-dev hardhat
-
-npx hardhat compile
-```
