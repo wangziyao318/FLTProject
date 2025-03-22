@@ -38,8 +38,8 @@ describe("Governance Contract", function () {
   });
 
   it("should allow proposal creation, voting, and result in a succeeded proposal", async function () {
-    // Prepare dummy proposal parameters.
-    const targets = [await governance.getAddress()]; // dummy target
+    // Prepare a proposal.
+    const targets = [await governance.getAddress()];
     const values = [0];
     const calldatas = ["0x"];
     const description = "ipfs://proposalMetadata";
@@ -48,7 +48,7 @@ describe("Governance Contract", function () {
     const tx = await governance.connect(voter).propose(targets, values, calldatas, description);
     const receipt = await tx.wait();
 
-    // Query for ProposalCreated events from the block where the proposal was created.
+    // Query for ProposalCreated events.
     const events = await governance.queryFilter(
       "ProposalCreated",
       receipt.blockNumber,
@@ -58,7 +58,7 @@ describe("Governance Contract", function () {
     const proposalCreatedEvent = events[0];
     const proposalId = proposalCreatedEvent.args.proposalId;
 
-    // Wait for one block (voting delay is 1 block).
+    // Wait for one block of voting delay.
     await network.provider.send("evm_mine", []);
 
     // Cast a "For" vote (support = 1).
@@ -74,7 +74,7 @@ describe("Governance Contract", function () {
       await network.provider.send("evm_mine", []);
     }
 
-    // Check that the proposal state is "Succeeded" (state 4).
+    // Check that the proposal state is "Succeeded" (4).
     const state = await governance.state(proposalId);
     expect(state).to.equal(4);
   });

@@ -6,19 +6,20 @@ import "./FLT.sol";
 
 /**
  * @title Transaction
- * @notice Handles ETH contributions, fund locking/release, and FLT minting/burning for the crowdfunding platform.
- *         Off-chain project common data (such as project description, images, etc.) is stored on IPFS.
+ * @notice Handle ETH contributions, fund locking/release, and FLT minting/burning.
+ *         Off-chain project metadata is stored in JSON format on IPFS.
  */
 contract Transaction is Ownable {
     FLT public fltToken;
-    uint256 public constant FLT_TOKEN_ID = 1;
+    uint256 public constant FLT_TOKEN_ID = 1; // FLT for reputation only
 
-    // Constants for FLT penalties and rewards (adjust as needed)
-    uint256 public fanWithdrawPenalty = 1e18;       // 1 FLT penalty for fan withdrawal
-    uint256 public creatorRewardAmount = 10e18;       // 10 FLT reward per approved milestone
-    uint256 public creatorFailurePenalty = 5e18;      // 5 FLT penalty for milestone failure
-    uint256 public creatorCancelPenalty = 5e18;       // 5 FLT penalty for project cancellation
+    /// @dev Constants for FLT rewards and penalties (subject to change)
+    uint256 public creatorRewardAmount = 10e18; // 10 ether FLT reward for approved milestone
+    uint256 public fanWithdrawPenalty = 1e18; // 1 ether FLT penalty for fan withdrawal
+    uint256 public creatorFailurePenalty = 5e18; // 5 ether FLT penalty for milestone failure
+    uint256 public creatorCancelPenalty = 5e18; // 5 ether FLT penalty for project cancellation
 
+    /// @dev Total number of projects, used as projectID
     uint256 public projectCount;
 
     struct Project {
@@ -31,16 +32,16 @@ contract Transaction is Ownable {
         bool campaignSuccessful;
         bool campaignEnded;
         bool cancelled;
-        string metadataUri; // IPFS URI for off-chain project data (JSON)
+        string metadataUri; // IPFS URI for off-chain project metadata in JSON
     }
 
-    // projectId => Project details
+    ///@dev projectId => Project
     mapping(uint256 => Project) public projects;
-    // projectId => (fan address => contributed amount)
+    /// @dev projectId => (fan address => contributed amount)
     mapping(uint256 => mapping(address => uint256)) public contributions;
-    // projectId => (fan address => amount already withdrawn)
+    /// @dev projectId => (fan address => amount already withdrawn)
     mapping(uint256 => mapping(address => uint256)) public withdrawals;
-    // Blacklist for addresses that fail to maintain the required FLT balance
+    /// @dev Blacklist for addresses that fail to afford the FLT penalty amount
     mapping(address => bool) public blacklist;
 
     event ProjectCreated(
@@ -66,10 +67,10 @@ contract Transaction is Ownable {
 
     /**
      * @notice Creator launches a new project.
-     * @param totalMilestones The total number of milestones.
-     * @param targetAmount The funding target (in wei) for the campaign.
-     * @param metadataUri The IPFS URI pointing to off-chain project details (e.g. description, images).
-     * @return projectId The ID of the newly created project.
+     * @param totalMilestones The total number of milestones in the project.
+     * @param targetAmount The funding target (in wei) for fundraising campaign.
+     * @param metadataUri The IPFS URI for off-chain project metadata.
+     * @return projectId The ID of the project.
      */
     function createProject(
         uint256 totalMilestones,
@@ -78,8 +79,7 @@ contract Transaction is Ownable {
     ) external returns (uint256) {
         require(totalMilestones > 0, "Milestones must be > 0");
         require(targetAmount > 0, "Target amount must be > 0");
-        projectCount++;
-        projects[projectCount] = Project({
+        projects[++projectCount] = Project({
             creator: msg.sender,
             totalMilestones: totalMilestones,
             approvedMilestones: 0,
@@ -96,10 +96,12 @@ contract Transaction is Ownable {
     }
 
     /**
-     * @notice Fans contribute ETH to a project. Their contribution is recorded and rewarded with FLT.
-     * @param projectId The project to contribute to.
+     * @notice Fans contribute ETH to a project.
+     *         Their contribution is recorded and rewarded with FLT.
+     * @param projectId The project fans contribute to.
      */
     function contribute(uint256 projectId) external payable {
+        /// @dev storage is required to modify the on-chain data
         Project storage proj = projects[projectId];
         require(!proj.campaignEnded, "Campaign already ended");
         require(msg.value > 0, "Contribution must be > 0");
@@ -107,7 +109,7 @@ contract Transaction is Ownable {
         proj.fundsCollected += msg.value;
         emit ContributionReceived(projectId, msg.sender, msg.value);
 
-        // Mint FLT tokens to fan (here 1 wei contributes 1 FLT unit)
+        /// @dev Mint FLT tokens to fan (1 wei ETH contributes 1 wei FLT)
         fltToken.mint(msg.sender, msg.value);
 
         // Mark campaign as successful if the target is met or exceeded.
@@ -118,14 +120,18 @@ contract Transaction is Ownable {
     }
 
     /**
-     * @notice Allows a fan to withdraw their share of the locked funds if less than or equal to half the milestones have been approved.
-     *         A fixed FLT penalty is applied to discourage withdrawal.
+     * @notice Allows a fan to withdraw his share of the locked funds,
+     *         if no more than half the milestones have been approved.
+     *         A fixed FLT penalty is applied to fan on withdrawal.
      * @param projectId The project from which to withdraw.
      */
     function withdraw(uint256 projectId) external {
         Project storage proj = projects[projectId];
         require(proj.campaignSuccessful, "Campaign not successful");
-        require(proj.approvedMilestones * 2 <= proj.totalMilestones, "Withdrawal not allowed after > half milestones approved");
+        require(
+            proj.approvedMilestones * 2 <= proj.totalMilestones,
+            "Withdrawal not allowed after > half milestones approved"
+        );
 
         uint256 contributed = contributions[projectId][msg.sender];
         require(contributed > 0, "No contribution found");
@@ -143,7 +149,7 @@ contract Transaction is Ownable {
         require(success, "ETH transfer failed");
         emit Withdrawal(projectId, msg.sender, withdrawable);
 
-        // Apply FLT penalty for withdrawal.
+        // Apply FLT penalty for withdrawal, blacklist when needed.
         uint256 fanBalance = fltToken.balanceOf(msg.sender, FLT_TOKEN_ID);
         if (fanBalance < fanWithdrawPenalty) {
             blacklist[msg.sender] = true;
@@ -153,12 +159,16 @@ contract Transaction is Ownable {
     }
 
     /**
-     * @notice Called (by platform/admin or after a successful governance vote) to release ETH to the creator for a milestone.
+     * @notice Called by platform after a successful governance vote
+     *         to release ETH to the creator for a milestone.
      *         Also mints reward FLT tokens to the creator.
      * @param projectId The project for which to release funds.
-     * @param milestoneMetadataUri The IPFS URI pointing to off-chain milestone details (e.g. progress report, images).
+     * @param milestoneMetadataUri The IPFS URI for off-chain milestone metadata.
      */
-    function releaseMilestone(uint256 projectId, string calldata milestoneMetadataUri) external onlyOwner {
+    function releaseMilestone(
+        uint256 projectId,
+        string calldata milestoneMetadataUri
+    ) external onlyOwner {
         Project storage proj = projects[projectId];
         require(proj.campaignSuccessful, "Campaign not successful");
         require(!proj.cancelled, "Project cancelled");
@@ -220,6 +230,6 @@ contract Transaction is Ownable {
         }
     }
 
-    // Allow the contract to receive ETH.
+    /// @dev Important! Allow the contract to receive ETH directly.
     receive() external payable {}
 }

@@ -7,27 +7,15 @@ import "./FLT.sol";
 
 /**
  * @title Governance
- * @notice A simplified governance contract for milestone voting.
- *         Voting power is based on the FLT token balance (token id 1).
- *         Proposal details are referenced via an IPFS URI (provided in the proposal description).
- *
- * This contract adheres to the newest OpenZeppelin v5.x Governor library, overriding the following eight virtual functions:
- *  - clock()
- *  - CLOCK_MODE()
- *  - COUNTING_MODE()
- *  - hasVoted()
- *  - _quorumReached()
- *  - _voteSucceeded()
- *  - _getVotes()
- *  - _countVote()
+ * @notice A simple governance contract for milestone voting.
+ *         Voting power is based on the FLT token balance.
+ *         Proposal metadata are stored in description using IPFS URI.
  */
 contract Governance is Governor, GovernorSettings {
     FLT public fltToken;
     uint256 public constant FLT_TOKEN_ID = 1;
 
-    // --- Vote Counting Structures ---
-
-    // Vote types: 0 = Against, 1 = For, 2 = Abstain.
+    /// @dev Taken from GovernorCountingSimple; 0 = Against, 1 = For, 2 = Abstain.
     enum VoteType {
         Against,
         For,
@@ -49,29 +37,27 @@ contract Governance is Governor, GovernorSettings {
      * @dev Initializes the Governor.
      * @param _fltToken The address of the FLT token contract.
      */
-    constructor(
-        FLT _fltToken
-    )
+    constructor(FLT _fltToken)
         Governor("PlatformGovernor")
         GovernorSettings(
             1, // voting delay: 1 block
-            45818, // voting period: ~1 week in blocks
-            0 // proposal threshold
+            100, // voting period: 100 blocks
+            0 // proposal threshold: 0 FLT token, subject to change
         )
-    {
-        fltToken = _fltToken;
-    }
+    { fltToken = _fltToken; }
 
     /**
-     * @notice Defines the quorum (minimum votes needed for a proposal to be valid).
-     * blockNumber Ignored in this simplified example.
-     * @return The quorum in FLT token units.
+     * @notice Defines the minimum votes needed for a proposal to pass.
+     * blockNumber ignored for simplicity, use fixed quorum.
+     * @return The quorum in FLT.
      */
     function quorum(uint256 /* blockNumber */) public pure override returns (uint256) {
-        return 1000e18; // Example: require a quorum of 1000 FLT tokens.
+        return 1000e18; // require a quorum of 1000 ether FLT
     }
 
-    // --- Overrides from Governor and GovernorSettings ---
+
+
+    // --- Overridding Governor and GovernorSettings ---
 
     function proposalThreshold()
         public
@@ -84,6 +70,8 @@ contract Governance is Governor, GovernorSettings {
 
     /**
      * @notice Returns the current "clock" used for proposals (block number).
+     * @dev uint256 to uint48 cast, expect precision loss.
+     *      No need to use the new timestamp feature which is over-complicated.
      */
     function clock() public view override returns (uint48) {
         return uint48(block.number);
@@ -91,7 +79,7 @@ contract Governance is Governor, GovernorSettings {
 
     /**
      * @notice Returns the clock mode used by this Governor.
-     * @dev Since voting delay and period are defined in blocks, we return "mode=blocknumber".
+     * @dev Use the old mode block number "mode=blocknumber".
      */
     function CLOCK_MODE() public pure override returns (string memory) {
         return "mode=blocknumber";
@@ -99,16 +87,17 @@ contract Governance is Governor, GovernorSettings {
 
     /**
      * @notice Indicates the voting counting mode.
-     * @dev This string tells interfaces that the governor uses Bravo-style counting with for, against, and abstain.
+     * @dev The governor uses Bravo-style counting with for, against, and abstain.
+     *      This is simple and widely-adopted mode in dApps.
      */
     function COUNTING_MODE() public pure override returns (string memory) {
         return "support=bravo&quorum=for,against,abstain";
     }
 
     /**
-     * @notice Returns true if the given account has cast a vote on the specified proposal.
-     * @param proposalId The proposal identifier.
-     * @param account The address to check.
+     * @notice Return true if the account has voted on the proposal.
+     * @param proposalId The proposal ID.
+     * @param account The acount address.
      */
     function hasVoted(
         uint256 proposalId,
@@ -118,9 +107,9 @@ contract Governance is Governor, GovernorSettings {
     }
 
     /**
-     * @notice Determines if the quorum has been reached for a proposal.
-     * @param proposalId The proposal identifier.
-     * @return True if the sum of for, against, and abstain votes meets or exceeds the quorum.
+     * @notice Determine if the quorum has been reached for the proposal.
+     * @param proposalId The proposal ID.
+     * @return True if the total votes meets or exceeds the quorum.
      */
     function _quorumReached(
         uint256 proposalId
@@ -133,7 +122,7 @@ contract Governance is Governor, GovernorSettings {
 
     /**
      * @notice Determines if a proposal has succeeded.
-     * @param proposalId The proposal identifier.
+     * @param proposalId The proposal ID.
      * @return True if the "For" votes exceed the "Against" votes.
      */
     function _voteSucceeded(
@@ -144,10 +133,10 @@ contract Governance is Governor, GovernorSettings {
     }
 
     /**
-     * @notice Returns the voting power of an account at a given block.
-     * @param account The address whose votes to count.
-     * blockNumber The block number at which to fetch the voting power.
-     * params Additional parameters (unused in this simple example).
+     * @notice Returns the voting power of an account.
+     * @param account The address which votes.
+     * blockNumber The block number.
+     * params Additional parameters.
      * @return The voting power based on the FLT balance.
      */
     function _getVotes(
@@ -160,12 +149,12 @@ contract Governance is Governor, GovernorSettings {
 
     /**
      * @notice Records a vote on a proposal.
-     * @param proposalId The proposal identifier.
-     * @param account The voter's address.
+     * @param proposalId The proposal ID.
+     * @param account The address which votes.
      * @param support The vote type (0 = Against, 1 = For, 2 = Abstain).
      * @param weight The weight of the vote.
-     * params Additional parameters (unused).
-     * @return The weight of the vote that was counted.
+     * params Additional parameters.
+     * @return The weight of the vote.
      */
     function _countVote(
         uint256 proposalId,

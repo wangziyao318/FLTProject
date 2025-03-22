@@ -6,16 +6,16 @@ describe("Transaction Contract", function () {
   let transaction: any;
   let deployer: any, creator: any, fan: any;
 
-  // Test constants
+  // Constants
   const metadataUri = "ipfs://projectMetadata";
   const milestoneMetadataUri = "ipfs://milestoneMetadata";
   const totalMilestones = 4;
-  const targetAmount = ethers.parseEther("1"); // 1 ETH as bigint
+  const targetAmount = ethers.parseEther("1");
 
   beforeEach(async function () {
     [deployer, creator, fan] = await ethers.getSigners();
 
-    // Deploy the FLT contract with an IPFS metadata URI.
+    // Deploy the FLT contract.
     const FLTFactory = await ethers.getContractFactory("FLT");
     flt = await FLTFactory.deploy("ipfs://fltMetadata");
     await flt.waitForDeployment();
@@ -33,7 +33,8 @@ describe("Transaction Contract", function () {
     const tx = await transaction.connect(creator).createProject(totalMilestones, targetAmount, metadataUri);
     const receipt = await tx.wait();
 
-    // Query for the ProjectCreated event using the block number from the receipt.
+    // Query for the ProjectCreated event.
+    // queryFilter is an ether.js v6 feature.
     const events = await transaction.queryFilter(
       "ProjectCreated",
       receipt.blockNumber,
@@ -63,7 +64,7 @@ describe("Transaction Contract", function () {
     );
     expect(events.length).to.be.greaterThan(0);
     const event = events[0];
-    // Adjust the event argument names as defined in your contract.
+    // Adjust the event argument names as defined in the contract.
     expect(event.args.projectId).to.equal(1);
     expect(event.args.fan).to.equal(fan.address);
     expect(event.args.amount).to.equal(contributionAmount);
@@ -97,7 +98,7 @@ describe("Transaction Contract", function () {
     const contributionAmount = ethers.parseEther("1");
     await transaction.connect(fan).contribute(1, { value: contributionAmount });
 
-    // Perform withdrawal (no milestones released yet).
+    // Perform withdrawal (no milestones released).
     const txWithdraw = await transaction.connect(fan).withdraw(1);
     const receiptWithdraw = await txWithdraw.wait();
 
@@ -112,7 +113,7 @@ describe("Transaction Contract", function () {
     expect(event.args.projectId).to.equal(1);
     expect(event.args.fan).to.equal(fan.address);
 
-    // Verify that the fan's FLT balance is reduced by the penalty.
+    // Verify that the fan's FLT balance is burnt by the penalty.
     const penalty = await transaction.fanWithdrawPenalty();
     const fanNewFLT = await flt.balanceOf(fan.address, 1);
     expect(fanNewFLT).to.equal(contributionAmount - penalty);
@@ -128,7 +129,7 @@ describe("Transaction Contract", function () {
     // Capture creator's ETH balance before milestone release.
     const initialCreatorBalance = await ethers.provider.getBalance(creator.address);
 
-    // Release milestone (onlyOwner call by deployer).
+    // Release milestone.
     const txRelease = await transaction.connect(deployer).releaseMilestone(1, milestoneMetadataUri);
     const receiptRelease = await txRelease.wait();
 
@@ -186,7 +187,7 @@ describe("Transaction Contract", function () {
     const project = await transaction.projects(1);
     expect(project.cancelled).to.be.true;
 
-    // Since the creator had insufficient FLT, their address should be blacklisted.
+    // Since the creator had insufficient FLT, his address should be blacklisted.
     const isBlacklisted = await transaction.blacklist(creator.address);
     expect(isBlacklisted).to.be.true;
   });
