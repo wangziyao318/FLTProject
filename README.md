@@ -34,5 +34,20 @@ FLT - Fan Loyalty Token (no-transferable) == reputation
 
 ## Governance
 
-voting
+- voting power based on FLT
 
+
+
+## Usage
+
+```sh
+nvm alias default lts/*
+
+nvm install --lts
+
+nvm use default
+
+npm install --save-dev hardhat
+
+npx hardhat compile
+```
