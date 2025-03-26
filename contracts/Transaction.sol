@@ -1,17 +1,35 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./FLT.sol";
+
+/* TODO
+mint only to those without blacklist
+add event CampaignClosed(uint256 totalFunds, uint256 milestoneFund);
+nonReentrant for all write functions
+
+access control to replace ownable+blacklist function, blacklisted address cannot do any transactions
+
+fans can only withdraw when the compaign is active (avoid many subsequent issues),
+also remove the withdraw mapping so that only withdraw all contribution is possible (fees apply)
+
+creator can only cancel the project when no milestone has been approved
+
+when creator fails a milestone, the corresponding funds are refunded.
+this needs a withdraw mapping? no. all funds will be auto refunded by the platform (fees apply)
+*/
+
 
 /**
  * @title Transaction
  * @notice Handle ETH contributions, fund locking/release, and FLT minting/burning.
  *         Off-chain project metadata is stored in JSON format on IPFS.
  */
-contract Transaction is Ownable {
+contract Transaction is Ownable, ReentrancyGuard {
+    /// @dev FLT instance for minting and burning
     FLT public fltToken;
-    uint256 public constant FLT_TOKEN_ID = 1; // FLT for reputation only
 
     /// @dev Constants for FLT rewards and penalties (subject to change)
     uint256 public creatorRewardAmount = 10e18; // 10 ether FLT reward for approved milestone
@@ -30,7 +48,7 @@ contract Transaction is Ownable {
         uint256 fundsCollected;
         uint256 releasedFunds;
         bool campaignSuccessful;
-        bool campaignEnded;
+        bool campaignClosed;
         bool cancelled;
         string metadataUri; // IPFS URI for off-chain project metadata in JSON
     }
@@ -58,7 +76,7 @@ contract Transaction is Ownable {
         uint256 amountReleased,
         string milestoneMetadataUri
     );
-    event Withdrawal(uint256 projectId, address fan, uint256 amount);
+    event Withdrawal(uint256 projectId, address fan, uint256 amount); // event RefundIssued
     event ProjectCancelled(uint256 projectId, address creator);
 
     constructor(FLT _fltToken) Ownable(msg.sender) {
@@ -76,7 +94,7 @@ contract Transaction is Ownable {
         uint256 totalMilestones,
         uint256 targetAmount,
         string calldata metadataUri
-    ) external returns (uint256) {
+    ) external nonReentrant returns (uint256) {
         require(totalMilestones > 0, "Milestones must be > 0");
         require(targetAmount > 0, "Target amount must be > 0");
         projects[++projectCount] = Project({
@@ -87,7 +105,7 @@ contract Transaction is Ownable {
             fundsCollected: 0,
             releasedFunds: 0,
             campaignSuccessful: false,
-            campaignEnded: false,
+            campaignClosed: false,
             cancelled: false,
             metadataUri: metadataUri
         });
@@ -100,14 +118,26 @@ contract Transaction is Ownable {
      *         Their contribution is recorded and rewarded with FLT.
      * @param projectId The project fans contribute to.
      */
-    function contribute(uint256 projectId) external payable {
+    function contribute(uint256 projectId) external payable nonReentrant {
         /// @dev storage is required to modify the on-chain data
         Project storage proj = projects[projectId];
-        require(!proj.campaignEnded, "Campaign already ended");
+        require(!proj.campaignClosed, "Campaign already closed");
         require(msg.value > 0, "Contribution must be > 0");
-        contributions[projectId][msg.sender] += msg.value;
-        proj.fundsCollected += msg.value;
-        emit ContributionReceived(projectId, msg.sender, msg.value);
+
+        uint256 remaining = proj.targetAmount - proj.fundsCollected;
+        require(remaining > 0, "Funding target already reached");
+
+        uint256 contribution = msg.value;
+
+        if (msg.value > remaining) {
+            (bool success, ) = msg.sender.call{value: (contribution - remaining)}("");
+            require(success, "ETH refund failed");
+            contribution = remaining;
+        }
+
+        proj.fundsCollected += contribution;
+        contributions[projectId][msg.sender] += contribution;
+        emit ContributionReceived(projectId, msg.sender, contribution);
 
         /// @dev Mint FLT tokens to fan (1 wei ETH contributes 1 wei FLT)
         fltToken.mint(msg.sender, msg.value);
@@ -115,23 +145,22 @@ contract Transaction is Ownable {
         // Mark campaign as successful if the target is met or exceeded.
         if (proj.fundsCollected >= proj.targetAmount) {
             proj.campaignSuccessful = true;
-            proj.campaignEnded = true;
+            proj.campaignClosed = true;
         }
     }
 
     /**
-     * @notice Allows a fan to withdraw his share of the locked funds,
-     *         if no more than half the milestones have been approved.
+     * @notice Allows a fan to withdraw his contribution only when compaign is active,
      *         A fixed FLT penalty is applied to fan on withdrawal.
      * @param projectId The project from which to withdraw.
      */
-    function withdraw(uint256 projectId) external {
+    function withdraw(uint256 projectId) external nonReentrant {
         Project storage proj = projects[projectId];
-        require(proj.campaignSuccessful, "Campaign not successful");
-        require(
-            proj.approvedMilestones * 2 <= proj.totalMilestones,
-            "Withdrawal not allowed after > half milestones approved"
-        );
+        require(!proj.campaignClosed, "Campaign funds locked, cannot withdraw");
+        // require(
+        //     proj.approvedMilestones * 2 <= proj.totalMilestones,
+        //     "Withdrawal not allowed after > half milestones approved"
+        // );
 
         uint256 contributed = contributions[projectId][msg.sender];
         require(contributed > 0, "No contribution found");
@@ -150,7 +179,7 @@ contract Transaction is Ownable {
         emit Withdrawal(projectId, msg.sender, withdrawable);
 
         // Apply FLT penalty for withdrawal, blacklist when needed.
-        uint256 fanBalance = fltToken.balanceOf(msg.sender, FLT_TOKEN_ID);
+        uint256 fanBalance = fltToken.balanceOf(msg.sender, Constants.FLT_TOKEN_ID);
         if (fanBalance < fanWithdrawPenalty) {
             blacklist[msg.sender] = true;
         } else {
@@ -200,7 +229,7 @@ contract Transaction is Ownable {
         require(proj.campaignSuccessful, "Campaign not successful");
         require(!proj.cancelled, "Project cancelled");
 
-        uint256 creatorBalance = fltToken.balanceOf(proj.creator, FLT_TOKEN_ID);
+        uint256 creatorBalance = fltToken.balanceOf(proj.creator, Constants.FLT_TOKEN_ID);
         if (creatorBalance < creatorFailurePenalty) {
             blacklist[proj.creator] = true;
         } else {
@@ -222,7 +251,7 @@ contract Transaction is Ownable {
         proj.cancelled = true;
         emit ProjectCancelled(projectId, msg.sender);
 
-        uint256 creatorBalance = fltToken.balanceOf(proj.creator, FLT_TOKEN_ID);
+        uint256 creatorBalance = fltToken.balanceOf(proj.creator, Constants.FLT_TOKEN_ID);
         if (creatorBalance < creatorCancelPenalty) {
             blacklist[proj.creator] = true;
         } else {

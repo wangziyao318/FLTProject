@@ -5,6 +5,17 @@ import "@openzeppelin/contracts/governance/Governor.sol";
 import "@openzeppelin/contracts/governance/extensions/GovernorSettings.sol";
 import "./FLT.sol";
 
+/* TODO
+remove governor interface, make it simple
+
+use snapshot during voting period, avoid mint/burn effect
+on min voting balance and voting power during voting period
+
+also, link to blacklist, only allow no blacklist to vote (blacklist modifier),
+in this way, the blacklist may be placed in FLT.sol
+*/
+
+
 /**
  * @title Governance
  * @notice A simple governance contract for milestone voting.
@@ -13,7 +24,6 @@ import "./FLT.sol";
  */
 contract Governance is Governor, GovernorSettings {
     FLT public fltToken;
-    uint256 public constant FLT_TOKEN_ID = 1;
 
     /// @dev Taken from GovernorCountingSimple; 0 = Against, 1 = For, 2 = Abstain.
     enum VoteType {
@@ -42,7 +52,7 @@ contract Governance is Governor, GovernorSettings {
         GovernorSettings(
             1, // voting delay: 1 block
             100, // voting period: 100 blocks
-            0 // proposal threshold: 0 FLT token, subject to change
+            1 // proposal threshold: 1 FLT token, subject to change
         )
     { fltToken = _fltToken; }
 
@@ -144,7 +154,7 @@ contract Governance is Governor, GovernorSettings {
         uint256 /* blockNumber */,
         bytes memory /* params */
     ) internal view override returns (uint256) {
-        return fltToken.balanceOf(account, FLT_TOKEN_ID);
+        return fltToken.balanceOf(account, Constants.FLT_TOKEN_ID);
     }
 
     /**
