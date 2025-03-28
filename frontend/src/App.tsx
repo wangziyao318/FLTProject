@@ -1,158 +1,211 @@
-// App.tsx
-import React, { useState } from "react";
-import { ethers } from "ethers";
+import Header from "./components/Header"
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom'
+import Homepage from "./pages/Homepage"
+import UserProfile from "./pages/UserProfile"
+import CreateProject from "./pages/CreateProject"
+import Project from "./pages/Project"
+import { projectPath, createProjectPath, rootPath, userProfilePath, governancePath } from "./components/RouteConstants"
+import { useEffect } from 'react'
+import { setGlobalState, useGlobalState } from './utils/globalState';
+import TransactionArtifact from './artifacts/contracts/Transaction.sol/Transaction.json'
+import FLTArtifact from './artifacts/contracts/FLT.sol/FLT.json'
+import { ethers } from 'ethers'
+import { getProjects } from "./utils/contractServices"
+import Governance from "./pages/Governance"
 
-// Placeholder function for IPFS upload.
-// Replace with your actual IPFS integration (e.g., Pinata, Infura)
-const uploadToIPFS = async (metadata: any): Promise<string> => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve("ipfs://fakeHashForExample");
-    }, 1500);
-  });
-};
+//export const transactionContractAddress = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
+//export const fltContractAddress = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
 
-const App: React.FC = () => {
-  // State for wallet/account connection
-  const [account, setAccount] = useState<string>("");
-  // State for creator project form
-  const [projectName, setProjectName] = useState<string>("");
-  const [projectDescription, setProjectDescription] = useState<string>("");
-  const [uploadStatus, setUploadStatus] = useState<string>("");
-  // State for fan contribution form
-  const [selectedProject, setSelectedProject] = useState<string>("");
-  const [contribution, setContribution] = useState<string>("");
+function App() {
+  const [account] = useGlobalState("account")
+  const transactionAbi = TransactionArtifact.abi
+  const fltAbi = FLTArtifact.abi
+  const provider = new ethers.BrowserProvider(window.ethereum)
+  const transactionContract = new ethers.Contract(transactionContractAddress, transactionAbi, provider)
+  const fltContract = new ethers.Contract(fltContractAddress, fltAbi, provider)
 
-  // Connect to MetaMask wallet
-  const connectWallet = async () => {
-    if ((window as any).ethereum) {
-      try {
-        const accounts: string[] = await (window as any).ethereum.request({
-          method: "eth_requestAccounts",
-        });
-        setAccount(accounts[0]);
-      } catch (error) {
-        console.error("Wallet connection error:", error);
-      }
-    } else {
-      alert("MetaMask not found. Please install MetaMask.");
-    }
-  };
-
-  // Handler for creating a new project (Creator)
-  const handleCreateProject = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const metadata = {
-      name: projectName,
-      description: projectDescription,
-      creator: account,
-    };
-
-    setUploadStatus("Uploading metadata to IPFS...");
-    try {
-      const ipfsUri = await uploadToIPFS(metadata);
-      setUploadStatus("Metadata uploaded: " + ipfsUri);
-
-      // Example: interact with your contract:
-      // const provider = new ethers.BrowserProvider(window.ethereum);
-      // const signer = await provider.getSigner();
-      // const contract = new ethers.Contract(contractAddress, contractAbi, signer);
-      // const tx = await contract.launchProject(ipfsUri);
-      // await tx.wait();
-    } catch (error) {
-      console.error("Error uploading metadata:", error);
-      setUploadStatus("Error uploading metadata.");
-    }
-  };
-
-  // Handler for fan contribution
-  const handleContribute = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedProject) {
-      alert("Please enter the project's IPFS URI or address.");
+  // listen to the wallet connection
+  useEffect(() => {
+    if (!window.ethereum) {
+      alert("No Ethereum browser extension detected. Please install MetaMask extension.")
       return;
-    }
-    try {
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
+    } 
 
-      // Example: interact with your contract to contribute ETH:
-      // const contract = new ethers.Contract(contractAddress, contractAbi, signer);
-      // const tx = await contract.contribute(selectedProject, {
-      //   value: ethers.parseEther(contribution),
-      // });
-      // await tx.wait();
-      alert("Contribution successful! (Simulated)");
-    } catch (error) {
-      console.error("Contribution error:", error);
-      alert("Error during contribution.");
+    const accountChanged = (result: string[]) => {
+      setGlobalState("account", result[0])
+      console.log("Account was changed");
+      if (result) {
+        setGlobalState("active", true);
+      } else {
+        setGlobalState("active", false);
+      }
     }
-  };
+
+    const connect = async() => {
+      const result = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      setGlobalState("account", result[0])
+      console.log("Account was connected");
+    }
+
+    const disconnect = () => {
+      setGlobalState("account", "")
+      console.log("Account was disconnected");
+    }
+
+    window.ethereum.on('accountsChanged', accountChanged);
+    window.ethereum.on('connect', connect);
+    window.ethereum.on('disconnect', disconnect);
+
+    return () => {
+      window.ethereum.off('accountsChanged', accountChanged);
+      window.ethereum.off('connect', connect);
+      window.ethereum.off('disconnect', disconnect);
+    }
+  }, [account])
+
+  // listen to the ProjectCreated event
+  useEffect(() => {
+    if (!window.ethereum) {
+      alert("No Ethereum browser extension detected. Please install MetaMask extension.")
+      return;
+    } 
+
+    const listenToEvent = async() => {
+      try {
+        transactionContract.on('ProjectCreated', async () => {
+          await getProjects();
+          console.log('ProjectCreated!')
+        });
+      } catch (e) {
+        console.log(e);
+      }
+    }
+
+    listenToEvent();
+
+    return () => {
+      transactionContract.removeAllListeners('ProjectCreated');
+    }
+  }, []);
+
+  // listen to the ContributionReceived event
+  useEffect(() => {
+    if (!window.ethereum) {
+      alert("No Ethereum browser extension detected. Please install MetaMask extension.")
+      return;
+    } 
+    
+    const listenToEvent = async() => {
+      try {
+        transactionContract.on('ContributionReceived', async () => {
+          await getProjects();
+          console.log('ContributionReceived!')
+        })  
+      } catch (e) {
+        console.log(e);
+      }
+    }
+
+    listenToEvent();
+
+    return () => {
+      transactionContract.removeAllListeners('ContributionReceived');
+    }
+  }, [])
+
+  // listen to the MilestoneReleased event
+  useEffect(() => {
+    if (!window.ethereum) {
+      alert("No Ethereum browser extension detected. Please install MetaMask extension.")
+      return;
+    } 
+    
+    const listenToEvent = async() => {
+      try {
+        transactionContract.on('MilestoneReleased', async () => {
+          await getProjects();
+          console.log('MilestoneReleased!')
+        })  
+      } catch (e) {
+        console.log(e);
+      }
+    }
+
+    listenToEvent();
+
+    return () => {
+      transactionContract.removeAllListeners('MilestoneReleased');
+    }
+  }, [])
+
+  // listen to the Withdrawal event
+  useEffect(() => {
+    if (!window.ethereum) {
+      alert("No Ethereum browser extension detected. Please install MetaMask extension.")
+      return;
+    } 
+    
+    const listenToEvent = async() => {
+      try {
+        transactionContract.on('Withdrawal', async () => {
+          await getProjects();
+          console.log('Withdrawal!')
+        })  
+      } catch (e) {
+        console.log(e);
+      }
+    }
+
+    listenToEvent();
+
+    return () => {
+      transactionContract.removeAllListeners('Withdrawal');
+    }
+  }, [])
+
+  // listen to the ProjectCancelled event
+  useEffect(() => {
+    if (!window.ethereum) {
+      alert("No Ethereum browser extension detected. Please install MetaMask extension.")
+      return;
+    } 
+    
+    const listenToEvent = async() => {
+      try {
+        transactionContract.on('ProjectCancelled', async () => {
+          await getProjects();
+          console.log('ProjectCancelled!')
+        })  
+      } catch (e) {
+        console.log(e);
+      }
+    }
+
+    listenToEvent();
+
+    return () => {
+      transactionContract.removeAllListeners('ProjectCancelled');
+    }
+  }, [])
 
   return (
-    <div style={{ padding: "20px" }}>
-      <h1>Crowdfunding dApp</h1>
-      {/* Wallet Connection */}
-      {!account ? (
-        <button onClick={connectWallet}>Connect Wallet via MetaMask</button>
-      ) : (
-        <p>Connected as: {account}</p>
-      )}
-
-      <hr />
-
-      {/* Creator: Launch Project */}
-      <h2>Launch Project (Creator)</h2>
-      <form onSubmit={handleCreateProject}>
-        <div>
-          <label>Project Name:</label>
-          <input
-            type="text"
-            value={projectName}
-            onChange={(e) => setProjectName(e.target.value)}
-            required
-          />
+    <Router>
+      <>
+        <div className="min-h-screen">
+          <Header/>
+          <Routes>
+            <Route path={rootPath} element={<Homepage/>}/>
+            <Route path={userProfilePath} element={<UserProfile/>}/>
+            <Route path={createProjectPath} element={<CreateProject/>}/>
+            <Route path={projectPath} element={<Project/>}/>
+            <Route path={governancePath} element={<Governance/>}/>
+          </Routes>
         </div>
-        <div>
-          <label>Project Description:</label>
-          <textarea
-            value={projectDescription}
-            onChange={(e) => setProjectDescription(e.target.value)}
-            required
-          />
-        </div>
-        <button type="submit">Launch Project</button>
-      </form>
-      {uploadStatus && <p>{uploadStatus}</p>}
-
-      <hr />
-
-      {/* Fan: Contribute to a Project */}
-      <h2>Contribute to a Project (Fan)</h2>
-      <form onSubmit={handleContribute}>
-        <div>
-          <label>Project IPFS URI (or Address):</label>
-          <input
-            type="text"
-            value={selectedProject}
-            onChange={(e) => setSelectedProject(e.target.value)}
-            required
-          />
-        </div>
-        <div>
-          <label>Contribution (in ETH):</label>
-          <input
-            type="number"
-            step="0.01"
-            value={contribution}
-            onChange={(e) => setContribution(e.target.value)}
-            required
-          />
-        </div>
-        <button type="submit">Contribute</button>
-      </form>
-    </div>
+      </>
+    </Router>
   );
-};
+}
 
+export const transactionContractAddress = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
+export const fltContractAddress = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
 export default App;
