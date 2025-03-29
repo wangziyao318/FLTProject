@@ -1,10 +1,11 @@
 import { ethers } from "hardhat";
 import { expect } from "chai";
+import { FLT, Governance, Transaction } from "../typechain-types";
 
 describe("Crowdfunding dApp", function () {
-  let fltToken: any;
-  let transaction: any;
-  let governance: any;
+  let fltToken: FLT;
+  let transaction: Transaction;
+  let governance: Governance;
   let deployer: any;
   let creator: any;
   let fan1: any;

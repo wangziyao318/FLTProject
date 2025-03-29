@@ -15,6 +15,7 @@ git clone https://github.com/wangziyao318/FLTProject.git
 cd FLTProject
 npm install
 npx hardhat compile
+npx hardhat typechain
 
 # Frontend
 cd frontend
@@ -72,6 +73,13 @@ Abnormal transactions
    - call Governance.setTransaction(transactionAddress)
 
 ```typescript
+import { ethers } from "hardhat";
+import { FLT, Governance, Transaction } from "../typechain-types";
+
+let fltToken: FLT;
+let transaction: Transaction;
+let governance: Governance;
+
 [deployer, creator, fan1, fan2] = await ethers.getSigners();
 
 // Deploy FLT contract.
