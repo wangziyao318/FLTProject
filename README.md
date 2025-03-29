@@ -34,6 +34,9 @@ FLT (Fan Loyalty Token) == reputation
   - FAN_WITHDRAW: f(withdrawn_ETH) and blacklist if not affordable
   - DEFAULT: when creators fail to complete milestones, or milestones not approved, or creators cancel their projects
 
+Creators and fans receive different types of FLT
+- Fans use FLT to vote
+- Creators' FLT can't be used to vote, their FLT only indicates their reputation
 
 ## ETH Transactions
 
@@ -55,10 +58,37 @@ Abnormal transactions
     - creator's milestone not approved by voting
     - creator should continue his project and try to succeed in the next milestone
 
-
 ## Governance
 
-- voting power based on FLT (Bravo counting)
+- voting power based on fan's FLT balance
+- blacklist a wallet address if burning amount exceeds its balance.
+
+## Back-end Deployment
+
+1. Deploy FLT.sol
+2. Use FLT address to deploy Governance.sol
+3. Use FLT address and Governance address to deploy Transaction.sol
+4. Reference Transaction address in Governance (cross reference)
+   - call Governance.setTransaction(transactionAddress)
+
+```typescript
+[deployer, creator, fan1, fan2] = await ethers.getSigners();
+
+// Deploy FLT contract.
+const FLT = await ethers.getContractFactory("FLT");
+flt = await FLT.deploy("ipfs://sampleUri");
+
+// Deploy Governance contract.
+const Governance = await ethers.getContractFactory("Governance");
+governance = await Governance.deploy(flt.getAddress());
+
+// Deploy Transaction contract.
+const Transaction = await ethers.getContractFactory("Transaction");
+transaction = await Transaction.deploy(flt.getAddress(), governance.getAddress());
+
+// Set up cross reference.
+await governance.connect(deployer).setTransaction(transaction.getAddress());
+```
 
 ## Front-end
 
@@ -67,10 +97,8 @@ Abnormal transactions
    1. create project: project metadata form
    2. cancel project: button
    3. complete milestone: button
-   <!-- 4. IPFS -->
 3. fans
    1. contribute ETH to project: ETH number textform, button
-   2. withdraw previously contributed ETH: ETH textform, button
-   3. vote milestone: 3 button (approve, against, abstain)
-   4. 
+   2. withdraw previously contributed ETH: button (only withdraw all of them)
+   3. vote milestone: 3 button (abstain, approve, against)
 <!-- 4. IPFS -->

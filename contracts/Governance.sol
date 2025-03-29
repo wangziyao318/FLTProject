@@ -1,189 +1,146 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import "@openzeppelin/contracts/governance/Governor.sol";
-import "@openzeppelin/contracts/governance/extensions/GovernorSettings.sol";
-import "./FLT.sol";
-
-/* TODO
-remove governor interface, make it simple
-
-use snapshot during voting period, avoid mint/burn effect
-on min voting balance and voting power during voting period
-
-also, link to blacklist, only allow no blacklist to vote (blacklist modifier),
-in this way, the blacklist may be placed in FLT.sol
-*/
-
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "./IFLT.sol";
+import "./IGovernance.sol";
+import "./ITransaction.sol";
 
 /**
  * @title Governance
- * @notice A simple governance contract for milestone voting.
- *         Voting power is based on the FLT token balance.
- *         Proposal metadata are stored in description using IPFS URI.
+ * @notice A governance contract for milestone voting.
+ *         Voting power is based on fan's FLT balance.
+ *         Proposal metadata is stored using IPFS URI.
  */
-contract Governance is Governor, GovernorSettings {
-    FLT public fltToken;
+contract Governance is IGovernance, ReentrancyGuard {
+    IFLT flt;
+    ITransaction transaction;
 
-    /// @dev Taken from GovernorCountingSimple; 0 = Against, 1 = For, 2 = Abstain.
-    enum VoteType {
-        Against,
-        For,
-        Abstain
-    }
+    /// @dev Proposal duration in number of blocks
+    uint256 public constant VOTING_PERIOD = 10;
 
-    // Tracks vote counts for each proposal.
-    struct ProposalVote {
-        uint256 againstVotes;
-        uint256 forVotes;
+    /// @dev Minimum FLT balance required to cast a vote
+    uint256 public constant MIN_VOTING_BALANCE = 1e18;
+
+    /// @dev Minimum total votes required for a proposal to be valid
+    uint256 public constant QUORUM = 10e18;
+
+    /// @dev Total number of proposals, used as proposalId, 0 is reserved
+    uint256 public proposalCount;
+
+    struct Proposal {
+        uint256 projectId;
+        address creator;
+        uint256 startBlock;
+        uint256 endBlock;
         uint256 abstainVotes;
-    }
-    mapping(uint256 => ProposalVote) public proposalVotes;
-
-    // Tracks whether an address has voted on a proposal.
-    mapping(uint256 => mapping(address => bool)) private _hasVoted;
-
-    /**
-     * @dev Initializes the Governor.
-     * @param _fltToken The address of the FLT token contract.
-     */
-    constructor(FLT _fltToken)
-        Governor("PlatformGovernor")
-        GovernorSettings(
-            1, // voting delay: 1 block
-            100, // voting period: 100 blocks
-            1 // proposal threshold: 1 FLT token, subject to change
-        )
-    { fltToken = _fltToken; }
-
-    /**
-     * @notice Defines the minimum votes needed for a proposal to pass.
-     * blockNumber ignored for simplicity, use fixed quorum.
-     * @return The quorum in FLT.
-     */
-    function quorum(uint256 /* blockNumber */) public pure override returns (uint256) {
-        return 1000e18; // require a quorum of 1000 ether FLT
+        uint256 forVotes;
+        uint256 againstVotes;
+        bool executed;
+        string uri;
+        mapping(address => bool) hasVoted;
     }
 
+    ///@dev proposalId => Proposal
+    mapping(uint256 => Proposal) public proposals;
 
+    modifier notBlacklisted() {
+        require(
+            !flt.hasRole(flt.BLACKLIST_ROLE(), msg.sender),
+            "Blacklisted account"
+        );
+        _;
+    }
 
-    // --- Overridding Governor and GovernorSettings ---
-
-    function proposalThreshold()
-        public
-        view
-        override(Governor, GovernorSettings)
-        returns (uint256)
-    {
-        return super.proposalThreshold();
+    modifier onlyPlatform() {
+        require(flt.hasRole(0x00, msg.sender), "Not platform");
+        _;
     }
 
     /**
-     * @notice Returns the current "clock" used for proposals (block number).
-     * @dev uint256 to uint48 cast, expect precision loss.
-     *      No need to use the new timestamp feature which is over-complicated.
+     * @param _flt Address of deployed FLT contract
      */
-    function clock() public view override returns (uint48) {
-        return uint48(block.number);
-    }
+    constructor(address _flt) { flt = IFLT(_flt); }
+
+    // --- Platform's functions: setTransaction(), propose() ---
 
     /**
-     * @notice Returns the clock mode used by this Governor.
-     * @dev Use the old mode block number "mode=blocknumber".
+     * @dev Set cross reference of Governance to Transaction
+     * @param _transaction Address of deployed Transaction contract
      */
-    function CLOCK_MODE() public pure override returns (string memory) {
-        return "mode=blocknumber";
+    function setTransaction(address _transaction) external onlyPlatform {
+        require(address(transaction) == address(0), "Already set");
+        transaction = ITransaction(_transaction);
     }
 
-    /**
-     * @notice Indicates the voting counting mode.
-     * @dev The governor uses Bravo-style counting with for, against, and abstain.
-     *      This is simple and widely-adopted mode in dApps.
-     */
-    function COUNTING_MODE() public pure override returns (string memory) {
-        return "support=bravo&quorum=for,against,abstain";
+    function propose(
+        uint256 projectId,
+        address creator,
+        string calldata uri
+    ) external override onlyPlatform returns (uint256) {
+        Proposal storage proposal = proposals[++proposalCount];
+        proposal.projectId = projectId;
+        proposal.creator = creator;
+        proposal.startBlock = block.number;
+        proposal.endBlock = block.number + VOTING_PERIOD;
+        proposal.uri = uri;
+
+        emit ProposalCreated(proposalCount, creator);
+
+        return proposalCount;
     }
 
-    /**
-     * @notice Return true if the account has voted on the proposal.
-     * @param proposalId The proposal ID.
-     * @param account The acount address.
-     */
-    function hasVoted(
+    // --- Fan's function: castVote() ---
+
+    function castVote(
         uint256 proposalId,
-        address account
-    ) public view override returns (bool) {
-        return _hasVoted[proposalId][account];
+        uint8 support
+    ) external override notBlacklisted nonReentrant {
+        require(proposalId != 0, "Reserved ID");
+
+        Proposal storage proposal = proposals[proposalId];
+        require(proposal.creator != msg.sender, "Cannot vote own milestone");
+        require(block.number >= proposal.startBlock, "Proposal not started");
+        require(block.number < proposal.endBlock, "Proposal ended");
+        require(!proposal.hasVoted[msg.sender], "Already voted");
+        
+        uint256 balance = flt.balanceOf(msg.sender, flt.FAN_TOKEN_ID());
+        require(balance >= MIN_VOTING_BALANCE, "Insufficient FLT for voting");
+
+        if (support == 0) proposal.abstainVotes += balance; // abstain
+        else if (support == 1) proposal.forVotes += balance; // for
+        else if (support == 2) proposal.againstVotes += balance; // against
+        else revert("Wrong voting support type");
+
+        proposal.hasVoted[msg.sender] = true;
+        emit VoteCasted(proposalId, msg.sender, support);
     }
 
-    /**
-     * @notice Determine if the quorum has been reached for the proposal.
-     * @param proposalId The proposal ID.
-     * @return True if the total votes meets or exceeds the quorum.
-     */
-    function _quorumReached(
+    // --- Creator's function: execute() ---
+
+    function execute(
         uint256 proposalId
-    ) internal view override returns (bool) {
-        ProposalVote storage vote = proposalVotes[proposalId];
-        return
-            (vote.forVotes + vote.againstVotes + vote.abstainVotes) >=
-            quorum(block.number);
-    }
+    ) external override notBlacklisted nonReentrant {
+        Proposal storage proposal = proposals[proposalId];
+        require(proposal.creator == msg.sender, "Not project creator");
+        require(block.number >= proposal.endBlock, "Proposal still active");
+        require(!proposal.executed, "Proposal already executed");
 
-    /**
-     * @notice Determines if a proposal has succeeded.
-     * @param proposalId The proposal ID.
-     * @return True if the "For" votes exceed the "Against" votes.
-     */
-    function _voteSucceeded(
-        uint256 proposalId
-    ) internal view override returns (bool) {
-        ProposalVote storage vote = proposalVotes[proposalId];
-        return vote.forVotes > vote.againstVotes;
-    }
+        /// @dev If quorum is not met, skip execution and refresh voting period
+        uint256 totalVotes =
+            proposal.abstainVotes + proposal.forVotes + proposal.againstVotes;
+        if (totalVotes < QUORUM)
+            proposal.endBlock = block.number + VOTING_PERIOD;
+        else {
+            proposal.executed = true;
 
-    /**
-     * @notice Returns the voting power of an account.
-     * @param account The address which votes.
-     * blockNumber The block number.
-     * params Additional parameters.
-     * @return The voting power based on the FLT balance.
-     */
-    function _getVotes(
-        address account,
-        uint256 /* blockNumber */,
-        bytes memory /* params */
-    ) internal view override returns (uint256) {
-        return fltToken.balanceOf(account, Constants.FLT_TOKEN_ID);
-    }
+            /// @dev Simple majority, with 50% as threshold
+            bool approved = proposal.forVotes * 2 > totalVotes;
+            emit ProposalExecuted(proposalId, approved);
 
-    /**
-     * @notice Records a vote on a proposal.
-     * @param proposalId The proposal ID.
-     * @param account The address which votes.
-     * @param support The vote type (0 = Against, 1 = For, 2 = Abstain).
-     * @param weight The weight of the vote.
-     * params Additional parameters.
-     * @return The weight of the vote.
-     */
-    function _countVote(
-        uint256 proposalId,
-        address account,
-        uint8 support,
-        uint256 weight,
-        bytes memory /* params */
-    ) internal override returns (uint256) {
-        require(!_hasVoted[proposalId][account], "Governor: vote already cast");
-        _hasVoted[proposalId][account] = true;
-
-        ProposalVote storage vote = proposalVotes[proposalId];
-        if (support == uint8(VoteType.For)) {
-            vote.forVotes += weight;
-        } else if (support == uint8(VoteType.Against)) {
-            vote.againstVotes += weight;
-        } else if (support == uint8(VoteType.Abstain)) {
-            vote.abstainVotes += weight;
+            /// @dev Call Transaction.sol to release or void current milestone
+            if (approved) transaction.releaseMilestone(proposal.projectId);
+            else transaction.voidMilestone(proposal.projectId);
         }
-        return weight;
     }
 }

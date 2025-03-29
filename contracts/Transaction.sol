@@ -2,263 +2,308 @@
 pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "./FLT.sol";
-
-/* TODO
-mint only to those without blacklist
-add event CampaignClosed(uint256 totalFunds, uint256 milestoneFund);
-nonReentrant for all write functions
-
-access control to replace ownable+blacklist function, blacklisted address cannot do any transactions
-
-fans can only withdraw when the compaign is active (avoid many subsequent issues),
-also remove the withdraw mapping so that only withdraw all contribution is possible (fees apply)
-
-creator can only cancel the project when no milestone has been approved
-
-when creator fails a milestone, the corresponding funds are refunded.
-this needs a withdraw mapping? no. all funds will be auto refunded by the platform (fees apply)
-*/
-
+import "./IFLT.sol";
+import "./ITransaction.sol";
+import "./IGovernance.sol";
 
 /**
  * @title Transaction
  * @notice Handle ETH contributions, fund locking/release, and FLT minting/burning.
- *         Off-chain project metadata is stored in JSON format on IPFS.
+ *         Off-chain project metadata is stored using IPFS URI.
  */
-contract Transaction is Ownable, ReentrancyGuard {
-    /// @dev FLT instance for minting and burning
-    FLT public fltToken;
+contract Transaction is ITransaction, ReentrancyGuard {
+    IFLT flt;
+    IGovernance governance;
 
-    /// @dev Constants for FLT rewards and penalties (subject to change)
-    uint256 public creatorRewardAmount = 10e18; // 10 ether FLT reward for approved milestone
-    uint256 public fanWithdrawPenalty = 1e18; // 1 ether FLT penalty for fan withdrawal
-    uint256 public creatorFailurePenalty = 5e18; // 5 ether FLT penalty for milestone failure
-    uint256 public creatorCancelPenalty = 5e18; // 5 ether FLT penalty for project cancellation
+    /// @dev Constants for FLT rewards and penalties
+    uint256 public constant CREATOR_REWARD = 10e18;
+    uint256 public constant FAN_PENALTY = 1e17;
+    uint256 public constant CREATOR_PENALTY = 5e18;
 
-    /// @dev Total number of projects, used as projectID
+    /// @dev Total number of projects, used as projectId, 0 is reserved
     uint256 public projectCount;
+
+    struct Milestone {
+        uint8 status; // 0 default, 1 approved, 2 rejected, 3 submitted
+        uint256 proposalId;
+        string uri;
+    }
 
     struct Project {
         address creator;
-        uint256 totalMilestones;
-        uint256 approvedMilestones;
-        uint256 targetAmount;
-        uint256 fundsCollected;
-        uint256 releasedFunds;
-        bool campaignSuccessful;
-        bool campaignClosed;
+        uint256 targetFunds;
+        uint256 totalFunds;
+        Milestone[] milestones;
+        uint256 currentMilestone;
+        bool campaignEnded;
         bool cancelled;
-        string metadataUri; // IPFS URI for off-chain project metadata in JSON
+        bool completed;
+        string uri;
+        address[] contributors;
+        mapping(address => uint256) contributions;
     }
 
-    ///@dev projectId => Project
+    /// @dev projectId => Project
     mapping(uint256 => Project) public projects;
-    /// @dev projectId => (fan address => contributed amount)
-    mapping(uint256 => mapping(address => uint256)) public contributions;
-    /// @dev projectId => (fan address => amount already withdrawn)
-    mapping(uint256 => mapping(address => uint256)) public withdrawals;
-    /// @dev Blacklist for addresses that fail to afford the FLT penalty amount
-    mapping(address => bool) public blacklist;
+    /// @dev creator address => projectId[]
+    mapping(address => uint256[]) public projectIds;
 
-    event ProjectCreated(
-        uint256 projectId,
-        address creator,
-        uint256 totalMilestones,
-        uint256 targetAmount,
-        string metadataUri
-    );
-    event ContributionReceived(uint256 projectId, address fan, uint256 amount);
-    event MilestoneReleased(
-        uint256 projectId,
-        uint256 milestoneIndex,
-        uint256 amountReleased,
-        string milestoneMetadataUri
-    );
-    event Withdrawal(uint256 projectId, address fan, uint256 amount); // event RefundIssued
-    event ProjectCancelled(uint256 projectId, address creator);
+    modifier notBlacklisted() {
+        require(
+            !flt.hasRole(flt.BLACKLIST_ROLE(), msg.sender),
+            "Blacklisted account"
+        );
+        _;
+    }
 
-    constructor(FLT _fltToken) Ownable(msg.sender) {
-        fltToken = _fltToken;
+    modifier onlyPlatform() {
+        require(flt.hasRole(0x00, msg.sender), "Not platform");
+        _;
+    }
+
+    modifier validProjectId(uint256 projectId) {
+        require(projectId != 0, "Reserved ID");
+        require(projectId <= projectCount, "No such project");
+        _;
     }
 
     /**
-     * @notice Creator launches a new project.
-     * @param totalMilestones The total number of milestones in the project.
-     * @param targetAmount The funding target (in wei) for fundraising campaign.
-     * @param metadataUri The IPFS URI for off-chain project metadata.
-     * @return projectId The ID of the project.
+     * @param _flt Address of deployed FLT contract
+     * @param _governance Address of deployed Governance contract
      */
+    constructor(address _flt, address _governance) {
+        flt = IFLT(_flt);
+        governance = IGovernance(_governance);
+    }
+
+    // --- Creator's functions: createProject(), cancelProject(), submitMilestone() ---
+
     function createProject(
+        uint256 targetFunds,
         uint256 totalMilestones,
-        uint256 targetAmount,
-        string calldata metadataUri
-    ) external nonReentrant returns (uint256) {
-        require(totalMilestones > 0, "Milestones must be > 0");
-        require(targetAmount > 0, "Target amount must be > 0");
-        projects[++projectCount] = Project({
-            creator: msg.sender,
-            totalMilestones: totalMilestones,
-            approvedMilestones: 0,
-            targetAmount: targetAmount,
-            fundsCollected: 0,
-            releasedFunds: 0,
-            campaignSuccessful: false,
-            campaignClosed: false,
-            cancelled: false,
-            metadataUri: metadataUri
-        });
-        emit ProjectCreated(projectCount, msg.sender, totalMilestones, targetAmount, metadataUri);
+        string calldata uri
+    ) external override notBlacklisted nonReentrant returns (uint256) {
+        require(targetFunds > 0, "Funding target must be > 0");
+        require(totalMilestones > 0, "Total milestones must be > 0");
+        require(bytes(uri).length > 0, "IPFS URI cannot be empty");
+
+        Project storage proj = projects[++projectCount];
+
+        proj.creator = msg.sender;
+        proj.targetFunds = targetFunds;
+        proj.uri = uri;
+
+        /// @dev proj.milestones = new Milestone[](totalMilestones);
+        for (uint256 i = 0; i < totalMilestones; ++i) {
+            proj.milestones.push(Milestone(0, 0, ""));
+        }
+        require(proj.milestones.length == totalMilestones, "Wrong assign logic");
+
+        /// @dev Assign the project ID to creator address
+        projectIds[msg.sender].push(projectCount);
+
+        emit ProjectCreated(projectCount, msg.sender, targetFunds, totalMilestones, uri);
+
         return projectCount;
     }
 
-    /**
-     * @notice Fans contribute ETH to a project.
-     *         Their contribution is recorded and rewarded with FLT.
-     * @param projectId The project fans contribute to.
-     */
-    function contribute(uint256 projectId) external payable nonReentrant {
-        /// @dev storage is required to modify the on-chain data
+    function cancelProject(uint256 projectId) external override notBlacklisted nonReentrant validProjectId(projectId) {
         Project storage proj = projects[projectId];
-        require(!proj.campaignClosed, "Campaign already closed");
+        require(msg.sender == proj.creator, "Not the project creator");
+        require(!proj.cancelled, "Project already cancelled");
+        require(proj.currentMilestone == 0, "Project has milestone voted");
+        require(
+            proj.milestones[proj.currentMilestone].status != 3,
+            "Current milestone already submitted"
+        );
+
+        /// @dev Reject contribution during refund
+        proj.campaignEnded = true;
+        proj.cancelled = true;
+
+        emit ProjectCancelled(projectId, msg.sender);
+
+        /// @dev Burn creator's FLT as penalty, blacklist when needed
+        flt.burn(proj.creator, CREATOR_PENALTY, true);
+    
+        /// @dev Refund all ETH of the project to fans
+        for (uint256 i = 0; i < proj.contributors.length; ++i) {
+            uint256 value = proj.contributions[proj.contributors[i]];
+            if (value > 0) {
+                proj.contributions[proj.contributors[i]] = 0;
+                (bool success, ) = proj.contributors[i].call{value: value}("");
+                require(success, "Refund failed");
+                emit RefundIssued(projectId, proj.contributors[i], value);
+            }
+        }
+        delete proj.contributors;
+    }
+
+    function submitMilestone(
+        uint256 projectId,
+        string calldata uri
+    ) external override notBlacklisted nonReentrant validProjectId(projectId) {
+        Project storage proj = projects[projectId];
+        require(msg.sender == proj.creator, "Not the project creator");
+        require(proj.campaignEnded, "Campaign not ended");
+        require(!proj.cancelled, "Project already cancelled");
+        require(!proj.completed, "Project already completed");
+        require(
+            proj.milestones[proj.currentMilestone].status != 3,
+            "Current milestone already submitted"
+        );
+        
+        /// @dev Submit the current milestone
+        Milestone storage milestone = proj.milestones[proj.currentMilestone];
+        milestone.status = 3;
+        milestone.uri = uri;
+
+        emit MilestoneSubmitted(projectId, proj.currentMilestone);
+
+        /// @dev Call Governance.sol to raise a proposal, store the proposalId
+        milestone.proposalId = governance.propose(projectId, proj.creator, uri);
+    }
+
+    // --- Fan's functions: contribute(), withdraw() ---
+
+    function contribute(
+        uint256 projectId
+    ) external payable override notBlacklisted nonReentrant validProjectId(projectId) {
         require(msg.value > 0, "Contribution must be > 0");
 
-        uint256 remaining = proj.targetAmount - proj.fundsCollected;
+        Project storage proj = projects[projectId];
+        require(!proj.cancelled, "Project cancelled");
+        require(!proj.campaignEnded, "Campaign already ended");
+        require(msg.sender != proj.creator, "Cannot contribute to own project");
+
+        uint256 remaining = proj.targetFunds - proj.totalFunds;
         require(remaining > 0, "Funding target already reached");
 
+        /// @dev Refund exceeded contribution
         uint256 contribution = msg.value;
-
         if (msg.value > remaining) {
             (bool success, ) = msg.sender.call{value: (contribution - remaining)}("");
             require(success, "ETH refund failed");
             contribution = remaining;
         }
 
-        proj.fundsCollected += contribution;
-        contributions[projectId][msg.sender] += contribution;
+        /// @dev Add new contributor
+        if (proj.contributions[msg.sender] == 0)
+            proj.contributors.push(msg.sender);
+
+        proj.totalFunds += contribution;
+        proj.contributions[msg.sender] += contribution;
+
         emit ContributionReceived(projectId, msg.sender, contribution);
 
-        /// @dev Mint FLT tokens to fan (1 wei ETH contributes 1 wei FLT)
-        fltToken.mint(msg.sender, msg.value);
+        /// @dev Mint 1:1 FLT tokens to fan
+        flt.mint(msg.sender, msg.value, false);
 
-        // Mark campaign as successful if the target is met or exceeded.
-        if (proj.fundsCollected >= proj.targetAmount) {
-            proj.campaignSuccessful = true;
-            proj.campaignClosed = true;
+        /// @dev Close campaign if the funding target is met
+        if (proj.totalFunds >= proj.targetFunds) {
+            proj.campaignEnded = true;
+            emit CompaignEnded(projectId, proj.totalFunds);
         }
     }
 
-    /**
-     * @notice Allows a fan to withdraw his contribution only when compaign is active,
-     *         A fixed FLT penalty is applied to fan on withdrawal.
-     * @param projectId The project from which to withdraw.
-     */
-    function withdraw(uint256 projectId) external nonReentrant {
+    function withdraw(uint256 projectId) external override notBlacklisted nonReentrant validProjectId(projectId) {
         Project storage proj = projects[projectId];
-        require(!proj.campaignClosed, "Campaign funds locked, cannot withdraw");
-        // require(
-        //     proj.approvedMilestones * 2 <= proj.totalMilestones,
-        //     "Withdrawal not allowed after > half milestones approved"
-        // );
-
-        uint256 contributed = contributions[projectId][msg.sender];
-        require(contributed > 0, "No contribution found");
-
-        // Calculate fan's locked share based on the remaining locked pool.
-        uint256 lockedPool = proj.fundsCollected - proj.releasedFunds;
-        uint256 fanLocked = (contributed * lockedPool) / proj.fundsCollected;
-        uint256 alreadyWithdrawn = withdrawals[projectId][msg.sender];
-        require(fanLocked > alreadyWithdrawn, "No withdrawable balance");
-        uint256 withdrawable = fanLocked - alreadyWithdrawn;
-
-        // Update the record and transfer ETH.
-        withdrawals[projectId][msg.sender] += withdrawable;
-        (bool success, ) = msg.sender.call{value: withdrawable}("");
-        require(success, "ETH transfer failed");
-        emit Withdrawal(projectId, msg.sender, withdrawable);
-
-        // Apply FLT penalty for withdrawal, blacklist when needed.
-        uint256 fanBalance = fltToken.balanceOf(msg.sender, Constants.FLT_TOKEN_ID);
-        if (fanBalance < fanWithdrawPenalty) {
-            blacklist[msg.sender] = true;
-        } else {
-            fltToken.burn(msg.sender, fanWithdrawPenalty);
-        }
-    }
-
-    /**
-     * @notice Called by platform after a successful governance vote
-     *         to release ETH to the creator for a milestone.
-     *         Also mints reward FLT tokens to the creator.
-     * @param projectId The project for which to release funds.
-     * @param milestoneMetadataUri The IPFS URI for off-chain milestone metadata.
-     */
-    function releaseMilestone(
-        uint256 projectId,
-        string calldata milestoneMetadataUri
-    ) external onlyOwner {
-        Project storage proj = projects[projectId];
-        require(proj.campaignSuccessful, "Campaign not successful");
         require(!proj.cancelled, "Project cancelled");
-        require(proj.approvedMilestones < proj.totalMilestones, "All milestones already released");
+        require(!proj.campaignEnded, "Campaign ended, cannot withdraw");
 
-        // Calculate the fixed release amount per milestone.
-        uint256 releaseAmount = proj.targetAmount / proj.totalMilestones;
-        require(proj.fundsCollected - proj.releasedFunds >= releaseAmount, "Insufficient locked funds");
+        uint256 contributed = proj.contributions[msg.sender];
+        require(contributed > 0, "No contribution");
 
-        proj.releasedFunds += releaseAmount;
-        proj.approvedMilestones += 1;
+        (bool success, ) = msg.sender.call{value: contributed}("");
+        require(success, "ETH transfer failed");
 
-        // Transfer ETH to the creator.
-        (bool success, ) = proj.creator.call{value: releaseAmount}("");
+        proj.contributions[msg.sender] = 0;
+        
+        /// @dev Also remove contributor
+        uint256 len = proj.contributors.length;
+        for (uint256 i = 0; i < len; ++i) {
+            if (proj.contributors[i] == msg.sender) {
+                proj.contributors[i] = proj.contributors[len - 1];
+                proj.contributors.pop();
+                break;
+            }
+        }
+
+        emit RefundIssued(projectId, msg.sender, contributed);
+
+        /// @dev Burn fan's FLT as penalty, blacklist when needed
+        flt.burn(msg.sender, contributed + FAN_PENALTY, false);
+    }
+
+    // --- Platform's functions: releaseMilestone(), voidMilestone() ---
+
+    function releaseMilestone(uint256 projectId) external override onlyPlatform validProjectId(projectId) {
+        Project storage proj = projects[projectId];
+        require(proj.campaignEnded, "Campaign not ended");
+        require(!proj.cancelled, "Project already cancelled");
+        require(!proj.completed, "Project already completed");
+        require(
+            proj.milestones[proj.currentMilestone].status == 3,
+            "Current milestone is not in submitted state"
+        );
+
+        /// @dev Approve the current milestone
+        proj.milestones[proj.currentMilestone].status = 1;
+
+        /// @dev Calculate the amount of ETH to release
+        uint256 milestoneFunds = proj.targetFunds / proj.milestones.length;
+        proj.totalFunds -= milestoneFunds;
+        require(proj.totalFunds >= 0, "Wrong project total funds");
+
+        /// @dev Release ETH to the project creator
+        (bool success, ) = proj.creator.call{value: milestoneFunds}("");
         require(success, "Transfer to creator failed");
 
-        // Reward the creator with FLT.
-        fltToken.mint(proj.creator, creatorRewardAmount);
+        emit MilestoneReleased(projectId, proj.currentMilestone, milestoneFunds);
 
-        emit MilestoneReleased(projectId, proj.approvedMilestones, releaseAmount, milestoneMetadataUri);
+        if (proj.milestones.length > proj.currentMilestone)
+            proj.currentMilestone += 1;
+        else
+            proj.completed = true;
+        
+        /// @dev Mint creator's FLT as reward to project creator
+        flt.mint(proj.creator, CREATOR_REWARD, true);
     }
 
-    /**
-     * @notice Marks a milestone as failed and applies a FLT penalty to the creator.
-     * @param projectId The project for which the milestone failed.
-     */
-    function markMilestoneFailed(uint256 projectId) external onlyOwner {
+    function voidMilestone(uint256 projectId) external override onlyPlatform validProjectId(projectId) {
         Project storage proj = projects[projectId];
-        require(proj.campaignSuccessful, "Campaign not successful");
-        require(!proj.cancelled, "Project cancelled");
-
-        uint256 creatorBalance = fltToken.balanceOf(proj.creator, Constants.FLT_TOKEN_ID);
-        if (creatorBalance < creatorFailurePenalty) {
-            blacklist[proj.creator] = true;
-        } else {
-            fltToken.burn(proj.creator, creatorFailurePenalty);
-        }
-    }
-
-    /**
-     * @notice Allows the creator to cancel a project that has already succeeded in its campaign.
-     *         Cancellation burns FLT from the creator as penalty.
-     * @param projectId The project to cancel.
-     */
-    function cancelProject(uint256 projectId) external {
-        Project storage proj = projects[projectId];
-        require(msg.sender == proj.creator, "Only creator can cancel");
-        require(proj.campaignSuccessful, "Campaign not successful");
+        require(proj.campaignEnded, "Campaign not ended");
         require(!proj.cancelled, "Project already cancelled");
+        require(!proj.completed, "Project already completed");
+        require(
+            proj.milestones[proj.currentMilestone].status == 3,
+            "Current milestone is not in submitted state"
+        );
 
-        proj.cancelled = true;
-        emit ProjectCancelled(projectId, msg.sender);
+        /// @dev Reject the current milestone
+        proj.milestones[proj.currentMilestone].status = 2;
 
-        uint256 creatorBalance = fltToken.balanceOf(proj.creator, Constants.FLT_TOKEN_ID);
-        if (creatorBalance < creatorCancelPenalty) {
-            blacklist[proj.creator] = true;
-        } else {
-            fltToken.burn(proj.creator, creatorCancelPenalty);
+        if (proj.milestones.length > proj.currentMilestone)
+            proj.currentMilestone += 1;
+        else
+            proj.completed = true;
+        
+        /// @dev Burn creator's FLT as penalty, blacklist when needed
+        flt.burn(proj.creator, CREATOR_PENALTY, true);
+
+        /// @dev Refund all ETH of the milestone to fans
+        for (uint256 i = 0; i < proj.contributors.length; ++i) {
+            uint256 value = proj.contributions[proj.contributors[i]] / proj.milestones.length;
+            if (value > 0) {
+                proj.totalFunds -= value;
+                proj.contributions[proj.contributors[i]] -= value;
+                (bool success, ) = proj.contributors[i].call{value: value}("");
+                require(success, "Refund failed");
+                emit RefundIssued(projectId, proj.contributors[i], value);
+            }
         }
     }
 
-    /// @dev Important! Allow the contract to receive ETH directly.
+    /// @dev Allow the contract to receive ETH
     receive() external payable {}
 }
