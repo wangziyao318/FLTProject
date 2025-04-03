@@ -7,7 +7,10 @@ interface AddProjectButtonProps {
     disabled?: boolean;
 }
 
-const AddProjectButton = ({style = "bg-blue-500 hover:bg-blue-600", disabled = false}: AddProjectButtonProps) => {
+const AddProjectButton = ({ 
+    style = "px-8 py-4 text-lg bg-blue-600 hover:bg-blue-700 shadow-md hover:shadow-lg transition-all", 
+    disabled = false 
+}: AddProjectButtonProps) => {
     const navigate = useNavigate();
 
     const routeChange = () => {
@@ -18,11 +21,10 @@ const AddProjectButton = ({style = "bg-blue-500 hover:bg-blue-600", disabled = f
         <ButtonVariant 
             type="button" 
             text="Create Project" 
-            style={style} 
+            style={`${style} rounded-lg font-medium transform hover:-translate-y-0.5`}
             disabled={disabled} 
             clickHandler={routeChange}
         />
     )
 }
-
 export default AddProjectButton;

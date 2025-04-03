@@ -7,13 +7,17 @@ import reportWebVitals from './reportWebVitals';
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );
+
+// 添加科技感控制台提示
+console.log('%c🚀 Powered by Future Tech', 'color: #5f9cf8; font-size: 14px; font-family: Orbitron, sans-serif;');
+
 root.render(
   <React.StrictMode>
-    <App />
+    <div className="tech-global-overlay">
+      <App />
+    </div>
   </React.StrictMode>
 );
 
-// If you want to start measuring performance in your app, pass a function
-// to log results (for example: reportWebVitals(console.log))
-// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
-reportWebVitals();
+// 性能监测
+reportWebVitals(console.log);

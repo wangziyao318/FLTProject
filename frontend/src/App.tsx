@@ -138,30 +138,35 @@ function App() {
     }
   }, [])
 
-  // listen to the Withdrawal event
-  useEffect(() => {
-    if (!window.ethereum) {
-      alert("No Ethereum browser extension detected. Please install MetaMask extension.")
-      return;
-    } 
+  // // listen to the Withdrawal event
+  // useEffect(() => {
+  //   if (!window.ethereum || !transactionContract) {
+  //     if (!window.ethereum) {
+  //       alert("No Ethereum browser extension detected. Please install MetaMask extension.")
+  //     }
+  //     return;
+  //   } 
+  
+  //   const handleWithdrawal = async () => {
+  //     try {
+  //       await getProjects();
+  //       console.log('Withdrawal event processed');
+  //     } catch (error) {
+  //       console.error('Error handling Withdrawal:', error);
+  //     }
+  //   };
+  
+  //   // Remove the old listeners that may exist first.
+  //   transactionContract.off('Withdrawal', handleWithdrawal);
     
-    const listenToEvent = async() => {
-      try {
-        transactionContract.on('Withdrawal', async () => {
-          await getProjects();
-          console.log('Withdrawal!')
-        })  
-      } catch (e) {
-        console.log(e);
-      }
-    }
-
-    listenToEvent();
-
-    return () => {
-      transactionContract.removeAllListeners('Withdrawal');
-    }
-  }, [])
+  //   // Add a new listener
+  //   transactionContract.on('Withdrawal', handleWithdrawal);
+  
+  //   return () => {
+  //     // Ensure the same callback reference is used during cleanup
+  //     transactionContract.off('Withdrawal', handleWithdrawal);
+  //   };
+  // }, [transactionContract]); // AddtransactionContract作为依赖
 
   // listen to the ProjectCancelled event
   useEffect(() => {
