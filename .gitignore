@@ -4,10 +4,12 @@ node_modules
 # Hardhat files
 /cache
 /artifacts
+artifacts
 
 # TypeChain files
 /typechain
 /typechain-types
+typechain-types
 
 # solidity-coverage files
 /coverage
