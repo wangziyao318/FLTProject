@@ -13,6 +13,9 @@ export interface Project {
   campaignClosed: boolean;
   cancelled: boolean;
   metadataUri: string;
+  title: string;
+  targetFunds: string;
+  status: string;
   progress: number;
   metadata?: {
     title?: string;

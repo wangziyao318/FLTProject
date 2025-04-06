@@ -8,6 +8,160 @@ import { Project, Contribution, ContributedProject, CreateProjectParams } from '
 const transactionAbi = TransactionArtifact.abi
 const fltAbi = FLTArtifact.abi
 
+const USE_MOCK_DATA = true;
+const fakeProjects = [
+  {
+    id: 1,
+    creator: "0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
+    totalMilestones: 3,
+    approvedMilestones: 1,
+    targetAmount: "5.0",
+    fundsCollected: "3.75",
+    releasedFunds: "1.25",
+    campaignSuccessful: false,
+    campaignClosed: false,
+    cancelled: false,
+    metadataUri: "ipfs://QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco",
+    title: "Decentralized Art Marketplace",
+    targetFunds: "5.0",
+    status: "ACTIVE",
+    progress: 75,
+    metadata: {
+      title: "Decentralized Art Marketplace",
+      description: "Building a platform where artists can mint, showcase, and sell their digital artwork as NFTs with minimal fees. The platform will feature artist verification, royalty management, and a community voting system for trending collections.",
+      imageUrl: "https://images.unsplash.com/photo-1569748130764-3fed0c102c59?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80",
+      milestones: [
+        {
+          title: "Smart Contract Development",
+          description: "Develop and audit the NFT marketplace contracts including minting, auction, and royalty distribution."
+        },
+        {
+          title: "Frontend Development",
+          description: "Build responsive gallery views, artist profiles, and bidding interfaces with wallet integration."
+        },
+        {
+          title: "Beta Launch",
+          description: "Release platform to a limited audience for testing and collect feedback before full launch."
+        }
+      ]
+    }
+  },
+  {
+    id: 2,
+    creator: "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+    totalMilestones: 4,
+    approvedMilestones: 2,
+    targetAmount: "10.0",
+    fundsCollected: "10.0",
+    releasedFunds: "5.0",
+    campaignSuccessful: true,
+    campaignClosed: false,
+    cancelled: false,
+    metadataUri: "ipfs://QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco",
+    title: "DeFi Yield Aggregator",
+    targetFunds: "10.0",
+    status: "FUNDED",
+    progress: 100,
+    metadata: {
+      title: "DeFi Yield Aggregator",
+      description: "Creating an automated yield optimization platform that helps users maximize returns across multiple DeFi protocols. The system will automatically move funds between lending protocols to achieve the highest APY.",
+      imageUrl: "https://images.unsplash.com/photo-1620321023374-d1a68fbc720d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80",
+      milestones: [
+        {
+          title: "Protocol Integration",
+          description: "Connect with major lending platforms via smart contracts (Aave, Compound, etc.)"
+        },
+        {
+          title: "Strategy Development",
+          description: "Create optimization algorithms for yield maximization across protocols"
+        },
+        {
+          title: "Security Audit",
+          description: "Complete comprehensive security audit by a third-party firm"
+        },
+        {
+          title: "Public Launch",
+          description: "Deploy to mainnet and start marketing campaign"
+        }
+      ]
+    }
+  },
+  {
+    id: 3,
+    creator: "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+    totalMilestones: 2,
+    approvedMilestones: 0,
+    targetAmount: "2.0",
+    fundsCollected: "0.5",
+    releasedFunds: "0.0",
+    campaignSuccessful: false,
+    campaignClosed: false,
+    cancelled: false,
+    metadataUri: "ipfs://QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco",
+    title: "Smart Contract Audit Tool",
+    targetFunds: "2.0",
+    status: "ACTIVE",
+    progress: 25,
+    metadata: {
+      title: "Smart Contract Audit Tool",
+      description: "Developing an open-source tool that automatically scans Solidity smart contracts for common vulnerabilities and best practice violations, with detailed explanations and fix suggestions.",
+      imageUrl: "https://images.unsplash.com/photo-1639322537228-f710d846310a?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80",
+      milestones: [
+        {
+          title: "Vulnerability Detection Engine",
+          description: "Build the core scanning engine that can detect common smart contract vulnerabilities"
+        },
+        {
+          title: "Web Interface",
+          description: "Create a user-friendly web interface for uploading and analyzing contracts"
+        }
+      ]
+    }
+  }
+];
+
+// Sample contributions for each project
+const fakeContributions = {
+  1: [
+    {
+      user: "0x7cB57B5A97eAbe94205C07890BE4c1aD31E486A8",
+      amount: "2.0"
+    },
+    {
+      user: "0x2546BcD3c84621e976D8185a91A922aE77ECEc30",
+      amount: "1.0"
+    },
+    {
+      user: "0xbDA5747bFD65F08deb54cb465eB87D40e51B197E",
+      amount: "0.75"
+    }
+  ],
+  2: [
+    {
+      user: "0x7cB57B5A97eAbe94205C07890BE4c1aD31E486A8",
+      amount: "5.0"
+    },
+    {
+      user: "0xbDA5747bFD65F08deb54cb465eB87D40e51B197E",
+      amount: "3.0"
+    },
+    {
+      user: "0xdD2FD4581271e230360230F9337D5c0430Bf44C0",
+      amount: "2.0"
+    }
+  ],
+  3: [
+    {
+      user: "0x2546BcD3c84621e976D8185a91A922aE77ECEc30",
+      amount: "0.3"
+    },
+    {
+      user: "0xdD2FD4581271e230360230F9337D5c0430Bf44C0",
+      amount: "0.2"
+    }
+  ]
+};
+
 // Connect to wallet
 export const connectWallet = async (): Promise<string | null> => {
   if (!window.ethereum) {
@@ -138,6 +292,12 @@ export const createProject = async ({
 
 // Get all projects
 export const getProjects = async (): Promise<Project[]> => {
+
+  if (USE_MOCK_DATA) {
+    setGlobalState('allProjects', fakeProjects);
+    return fakeProjects;
+  }
+
   try {
     const provider = new ethers.BrowserProvider(window.ethereum);
     const contract = new ethers.Contract(transactionContractAddress, transactionAbi, provider);
@@ -167,6 +327,16 @@ export const getProjects = async (): Promise<Project[]> => {
 
 // Get a single project by ID
 export const getProject = async (id: string | number): Promise<Project | null> => {
+
+  if (USE_MOCK_DATA) {
+    const project = fakeProjects.find(p => p.id === Number(id));
+    if (project) {
+      setGlobalState('project', project);
+      return project;
+    }
+    return null;
+  }
+
   try {
     const provider = new ethers.BrowserProvider(window.ethereum);
     const contract = new ethers.Contract(transactionContractAddress, transactionAbi, provider);
@@ -201,6 +371,17 @@ export const getProject = async (id: string | number): Promise<Project | null> =
 
 // Get projects created by the current user
 export const getCreatedProjects = async (address: string): Promise<Project[]> => {
+
+  if (USE_MOCK_DATA) {
+    // Filter the fake projects to find ones where the creator matches the provided address
+    const created = fakeProjects.filter(
+      project => project.creator.toLowerCase() === address.toLowerCase()
+    );
+    
+    setGlobalState('createdProjects', created);
+    return created;
+  }
+
   try {
     const allProjects = await getProjects();
     const created = allProjects.filter(
@@ -332,6 +513,23 @@ export const withdrawContribution = async (projectId: string | number): Promise<
 
 // Cancel project (for creator)
 export const cancelProject = async (projectId: string | number): Promise<[boolean, string]> => {
+  
+  if (USE_MOCK_DATA) {
+    const projectIndex = fakeProjects.findIndex(p => p.id === Number(projectId));
+    if (projectIndex !== -1) {
+      // Update the project status to cancelled
+      fakeProjects[projectIndex] = {
+        ...fakeProjects[projectIndex],
+        cancelled: true,
+        status: "CANCELLED"
+      };
+      
+      setGlobalState('allProjects', fakeProjects);
+      return [true, ""];
+    }
+    return [false, "Project not found"];
+  }
+
   try {
     const account = getGlobalState("account");
     const contract = await getContract();
@@ -406,6 +604,9 @@ function formatProject(project: any): Omit<Project, 'id'> {
     campaignSuccessful: project.campaignSuccessful,
     campaignClosed: project.campaignClosed,
     cancelled: project.cancelled,
+    status: project.cancelled,
+    title: project.creator,
+    targetFunds:ethers.formatEther(project.targetAmount),
     metadataUri: project.metadataUri,
     progress: project.fundsCollected.gt(0) 
       ? (project.fundsCollected.mul(100).div(project.targetAmount)).toNumber() 

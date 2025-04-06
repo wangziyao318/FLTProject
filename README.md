@@ -14,17 +14,11 @@ nvm use default
 git clone https://github.com/wangziyao318/FLTProject.git
 cd FLTProject
 npm install
+npx hardhat compile
 npx hardhat typechain
 
 # Frontend
 cd frontend
-
-# "Copy" (soft link) artifacts and typechain-types
-cd src
-ln -s ../../artifacts .
-ln -s ../../typechain-types .
-cd ..
-
 npm install
 npm start
 ```
@@ -108,17 +102,11 @@ await governance.connect(deployer).setTransaction(transaction.getAddress());
 
 1. login with metamask account
 2. creators
-   1. create project: targetFunds, totalMilestones, project metadata form ("ipfs://sampleUri"), submit button
-   2. list all projects of the creator, including projectId
-      1. cancel project: projectId, cancel button
-      2. submit milestone: projectId, milestone metadata form ("ipfs://sampleUri"), submit milestone button
-      3. get the proposalId from submitted milstone from project
-         1. list proposal using proposalId
-         2. execute proposal: proposalId, execute button
+   1. create project: project metadata form
+   2. cancel project: button
+   3. complete milestone: button
 3. fans
-   1. list all projects and their creators address, including projectId
-      1. contribute ETH to project: projectId, ETH alue, contribute button
-      2. withdraw previously contributed ETH: projectId, withdraw button (only withdraw all of them)
-      3. list submitted milestone of all projects
-         1. vote milestone: proposalId, 3 button (abstain=0, approve=1, against=2)
+   1. contribute ETH to project: ETH number textform, button
+   2. withdraw previously contributed ETH: button (only withdraw all of them)
+   3. vote milestone: 3 button (abstain, approve, against)
 <!-- 4. IPFS -->

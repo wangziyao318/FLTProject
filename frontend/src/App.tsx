@@ -3,18 +3,21 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom'
 import Homepage from "./pages/Homepage"
 import UserProfile from "./pages/UserProfile"
 import CreateProject from "./pages/CreateProject"
+import ProjectDetails from "./pages/ProjectDetails"
 import Project from "./pages/Project"
-import { projectPath, createProjectPath, rootPath, userProfilePath, governancePath } from "./components/RouteConstants"
+import { projectPath, createProjectPath, rootPath, userProfilePath, governancePath} from "./components/RouteConstants"
 import { useEffect } from 'react'
 import { setGlobalState, useGlobalState } from './utils/globalState';
 import TransactionArtifact from './artifacts/contracts/Transaction.sol/Transaction.json'
 import FLTArtifact from './artifacts/contracts/FLT.sol/FLT.json'
 import { ethers } from 'ethers'
 import { getProjects } from "./utils/contractServices"
-import Governance from "./pages/Governance"
 
 //export const transactionContractAddress = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
 //export const fltContractAddress = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+
+export const transactionContractAddress = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
+export const fltContractAddress = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
 
 function App() {
   const [account] = useGlobalState("account")
@@ -88,31 +91,6 @@ function App() {
     }
   }, []);
 
-  // listen to the ContributionReceived event
-  useEffect(() => {
-    if (!window.ethereum) {
-      alert("No Ethereum browser extension detected. Please install MetaMask extension.")
-      return;
-    } 
-    
-    const listenToEvent = async() => {
-      try {
-        transactionContract.on('ContributionReceived', async () => {
-          await getProjects();
-          console.log('ContributionReceived!')
-        })  
-      } catch (e) {
-        console.log(e);
-      }
-    }
-
-    listenToEvent();
-
-    return () => {
-      transactionContract.removeAllListeners('ContributionReceived');
-    }
-  }, [])
-
   // listen to the MilestoneReleased event
   useEffect(() => {
     if (!window.ethereum) {
@@ -138,30 +116,34 @@ function App() {
     }
   }, [])
 
-  // listen to the Withdrawal event
-  useEffect(() => {
-    if (!window.ethereum) {
-      alert("No Ethereum browser extension detected. Please install MetaMask extension.")
-      return;
-    } 
+  // useEffect(() => {
+  //   if (!window.ethereum || !transactionContract) {
+  //     if (!window.ethereum) {
+  //       alert("No Ethereum browser extension detected. Please install MetaMask extension.")
+  //     }
+  //     return;
+  //   } 
+  
+  //   const handleWithdrawal = async () => {
+  //     try {
+  //       await getProjects();
+  //       console.log('Withdrawal event processed');
+  //     } catch (error) {
+  //       console.error('Error handling Withdrawal:', error);
+  //     }
+  //   };
+  
+  //   // Remove the old listeners that may exist first.
+  //   transactionContract.off('Withdrawal', handleWithdrawal);
     
-    const listenToEvent = async() => {
-      try {
-        transactionContract.on('Withdrawal', async () => {
-          await getProjects();
-          console.log('Withdrawal!')
-        })  
-      } catch (e) {
-        console.log(e);
-      }
-    }
-
-    listenToEvent();
-
-    return () => {
-      transactionContract.removeAllListeners('Withdrawal');
-    }
-  }, [])
+  //   // Add a new listener
+  //   transactionContract.on('Withdrawal', handleWithdrawal);
+  
+  //   return () => {
+  //     // Ensure the same callback reference is used during cleanup
+  //     transactionContract.off('Withdrawal', handleWithdrawal);
+  //   };
+  // }, [transactionContract]); // AddtransactionContract作为依赖
 
   // listen to the ProjectCancelled event
   useEffect(() => {
@@ -198,7 +180,6 @@ function App() {
             <Route path={userProfilePath} element={<UserProfile/>}/>
             <Route path={createProjectPath} element={<CreateProject/>}/>
             <Route path={projectPath} element={<Project/>}/>
-            <Route path={governancePath} element={<Governance/>}/>
           </Routes>
         </div>
       </>
@@ -206,6 +187,4 @@ function App() {
   );
 }
 
-export const transactionContractAddress = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
-export const fltContractAddress = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
 export default App;
