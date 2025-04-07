@@ -1,0 +1,27 @@
+/* 导入Google字体 - 你可以选择其他喜欢的字体 */
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Poppins:wght@400;600&display=swap');
+
+.homepage-container {
+  text-align: center;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+/* 如果你想要直接在这里设置Slogan样式而不是通过Slogan组件 */
+.slogan-text {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 3rem;
+  line-height: 1.2;
+  color: #ffffff;
+  margin-bottom: 1.5rem;
+}
+
+.slogan-subtext {
+  font-family: 'Titillium Web', sans-serif;
+  font-weight: 600;
+  font-size: 1.5rem;
+  color: #ffffff;
+  margin-bottom: 3rem;
+}
