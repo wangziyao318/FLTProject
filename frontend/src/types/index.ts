@@ -13,6 +13,9 @@ export interface Project {
   campaignClosed: boolean;
   cancelled: boolean;
   metadataUri: string;
+  title: string;
+  targetFunds: string;
+  status: string;
   progress: number;
   metadata?: {
     title?: string;
@@ -76,6 +79,8 @@ export interface GlobalState {
   account: string;
   accountBalance: string;
   fltBalance: string;
+  creatorTokenBalance: string;
+  fanTokenBalance: string;
   active: boolean;
   allProjects: Project[];
   project: Project | null;
@@ -83,5 +88,6 @@ export interface GlobalState {
   createdProjects: Project[];
   contributedProjects: ContributedProject[];
   isOwner: boolean;
+  isBlacklisted: boolean;
   pendingMilestones: any[];
 }

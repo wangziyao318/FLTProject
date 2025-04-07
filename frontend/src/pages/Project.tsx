@@ -1,13 +1,12 @@
 import { useParams } from "react-router-dom";
 import ProjectDetails from "./ProjectDetails";
-import { getProject, getContributions } from "../utils/contractServices";
+import { getProject } from "../utils/contractServices";
 import { useState, useEffect } from "react";
 import { Project as ProjectType, Contribution } from "../types"; // Import types with alias to avoid naming conflict
 
 const Project = () => {
     const { id } = useParams<{ id: string }>();
     const [project, setProject] = useState<ProjectType | null>(null);
-    const [contributions, setContributions] = useState<Contribution[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<Error | null>(null);
 
@@ -24,11 +23,7 @@ const Project = () => {
                 // Fetch project details
                 const projectData = await getProject(id);
                 setProject(projectData);
-                
-                // Fetch contributions
-                const contributionData = await getContributions(id);
-                setContributions(contributionData);
-                
+                                
                 setLoading(false);
             } catch (error) {
                 console.error('Error fetching project details:', error);
@@ -60,18 +55,13 @@ const Project = () => {
     }
 
     return (
-        <div className="pt-16">
-            {project ? (
-                <ProjectDetails 
-                    project={project} 
-                    contributions={contributions}
-                />
-            ) : (
-                <div className="flex justify-center items-center min-h-screen">
-                    <p>Project not found.</p>
-                </div>
-            )}
-        </div>
+       <div>
+
+        {project ? ( <ProjectDetails project={project}/>) :
+       <p>Loading Project Details....</p>}
+ 
+      </div>
+
     );
 }
 

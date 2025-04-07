@@ -5,6 +5,8 @@ const { setGlobalState, useGlobalState, getGlobalState } = createGlobalState<Glo
   account: "",
   accountBalance: "",
   fltBalance: "",
+  creatorTokenBalance: "",
+  fanTokenBalance: "",
   active: false,
   allProjects: [],
   project: null,
@@ -12,6 +14,7 @@ const { setGlobalState, useGlobalState, getGlobalState } = createGlobalState<Glo
   createdProjects: [],
   contributedProjects: [],
   isOwner: false,
+  isBlacklisted: false,
   pendingMilestones: [],
 })
 
