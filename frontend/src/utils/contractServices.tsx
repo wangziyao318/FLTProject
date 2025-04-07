@@ -9,6 +9,8 @@ const transactionAbi = TransactionArtifact.abi
 const fltAbi = FLTArtifact.abi
 
 const USE_MOCK_DATA = true;
+
+// Sample Project for each project
 const fakeProjects = [
   {
     id: 1,
@@ -120,47 +122,6 @@ const fakeProjects = [
   }
 ];
 
-// Sample contributions for each project
-const fakeContributions = {
-  1: [
-    {
-      user: "0x7cB57B5A97eAbe94205C07890BE4c1aD31E486A8",
-      amount: "2.0"
-    },
-    {
-      user: "0x2546BcD3c84621e976D8185a91A922aE77ECEc30",
-      amount: "1.0"
-    },
-    {
-      user: "0xbDA5747bFD65F08deb54cb465eB87D40e51B197E",
-      amount: "0.75"
-    }
-  ],
-  2: [
-    {
-      user: "0x7cB57B5A97eAbe94205C07890BE4c1aD31E486A8",
-      amount: "5.0"
-    },
-    {
-      user: "0xbDA5747bFD65F08deb54cb465eB87D40e51B197E",
-      amount: "3.0"
-    },
-    {
-      user: "0xdD2FD4581271e230360230F9337D5c0430Bf44C0",
-      amount: "2.0"
-    }
-  ],
-  3: [
-    {
-      user: "0x2546BcD3c84621e976D8185a91A922aE77ECEc30",
-      amount: "0.3"
-    },
-    {
-      user: "0xdD2FD4581271e230360230F9337D5c0430Bf44C0",
-      amount: "0.2"
-    }
-  ]
-};
 
 // Connect to wallet
 export const connectWallet = async (): Promise<string | null> => {
@@ -187,12 +148,23 @@ export const connectWallet = async (): Promise<string | null> => {
 
 // Get ETH balance
 export const getUserBalance = async (accountAddress: string): Promise<string> => {
-  let balance = ethers.formatEther(
-    await window.ethereum.request({method: "eth_getBalance", params: [String(accountAddress), "latest"]})
-  );
-
-  setGlobalState("accountBalance", balance);
-  return getGlobalState("accountBalance");
+  try {
+    if (!window.ethereum) {
+      throw new Error("No Ethereum browser extension detected");
+    }
+    
+    const balance = await window.ethereum.request({
+      method: "eth_getBalance", 
+      params: [String(accountAddress), "latest"]
+    });
+    
+    const formattedBalance = ethers.formatEther(balance);
+    setGlobalState("accountBalance", formattedBalance);
+    return formattedBalance;
+  } catch (error) {
+    console.error("Error getting user balance:", error);
+    return "0";
+  }
 }
 
 // Get FLT token balance
@@ -201,36 +173,60 @@ export const getFLTBalance = async (accountAddress: string): Promise<string> => 
     const provider = new ethers.BrowserProvider(window.ethereum);
     const fltContract = new ethers.Contract(fltContractAddress, fltAbi, provider);
     
-    // Constants.FLT_TOKEN_ID is 1 (see FLT.sol)
-    const balance = await fltContract.balanceOf(accountAddress, 1);
-    const formattedBalance = ethers.formatEther(balance);
+    // Check if the address is a creator by examining past events or roles
+    // For now, we'll check both creator and fan token balances
+    const creatorTokenId = await fltContract.CREATOR_TOKEN_ID();
+    const fanTokenId = await fltContract.FAN_TOKEN_ID();
+    
+    // Get creator token balance
+    const creatorBalance = await fltContract.balanceOf(accountAddress, creatorTokenId);
+    
+    // Get fan token balance
+    const fanBalance = await fltContract.balanceOf(accountAddress, fanTokenId);
+    
+    // Sum the balances
+    const totalBalance = creatorBalance + fanBalance;
+    const formattedBalance = ethers.formatEther(totalBalance);
     
     setGlobalState("fltBalance", formattedBalance);
+    
+    // Also store individual balances for UI differentiation if needed
+    setGlobalState("creatorTokenBalance", ethers.formatEther(creatorBalance));
+    setGlobalState("fanTokenBalance", ethers.formatEther(fanBalance));
+    
     return formattedBalance;
   } catch (error: unknown) {
-    console.log(error);
+    console.error("Error getting FLT balance:", error);
     return "0";
   }
 }
 
-// Check if the current user is the contract owner
+// Check if the current user is the contract owner or has governance role
 export const checkIfOwner = async (accountAddress: string): Promise<boolean> => {
   try {
     const provider = new ethers.BrowserProvider(window.ethereum);
-    const transactionContract = new ethers.Contract(transactionContractAddress, transactionAbi, provider);
+    const fltContract = new ethers.Contract(fltContractAddress, fltAbi, provider);
     
-    const owner = await transactionContract.owner();
-    const isOwner = owner.toLowerCase() === accountAddress.toLowerCase();
+    // Check if the account has the DEFAULT_ADMIN_ROLE (0x00)
+    // This is the bytes32(0) role which is the admin role
+    const DEFAULT_ADMIN_ROLE = "0x0000000000000000000000000000000000000000000000000000000000000000";
+    const isOwner = await fltContract.hasRole(DEFAULT_ADMIN_ROLE, accountAddress);
     
     setGlobalState("isOwner", isOwner);
+    
+    // Also check if the user is blacklisted
+    const BLACKLIST_ROLE = await fltContract.BLACKLIST_ROLE();
+    const isBlacklisted = await fltContract.hasRole(BLACKLIST_ROLE, accountAddress);
+    setGlobalState("isBlacklisted", isBlacklisted);
+    
     return isOwner;
   } catch (error: unknown) {
-    console.log(error);
+    console.error("Error checking owner status:", error);
     return false;
   }
 }
 
-// Get connected contract instance
+// Get connected contract instance with signer
 export const getContract = async () => {
   const account = getGlobalState("account");
 
@@ -241,11 +237,11 @@ export const getContract = async () => {
 
     return contract;
   } else {
-    throw new Error("No Ethereum browser extension detected");
+    throw new Error("No connected account found. Please connect wallet first.");
   }
 }
 
-// Get FLT contract instance
+// Get FLT contract instance with signer
 export const getFLTContract = async () => {
   const account = getGlobalState("account");
 
@@ -256,7 +252,7 @@ export const getFLTContract = async () => {
 
     return contract;
   } else {
-    throw new Error("No Ethereum browser extension detected");
+    throw new Error("No connected account found. Please connect wallet first.");
   }
 }
 
@@ -267,24 +263,58 @@ export const createProject = async ({
   metadataUri
 }: CreateProjectParams): Promise<[boolean, string]> => {
   try {
+    // Check if user is blacklisted before creating project
+    const account = getGlobalState("account");
+    const isBlacklisted = getGlobalState("isBlacklisted");
+    
+    if (isBlacklisted) {
+      return [false, "Your account has been blacklisted and cannot create projects"];
+    }
+    
+    // Handle IPFS storage for project metadata
+    // Note: This is a placeholder - actual IPFS implementation needed
+    
+    // TODO: Implement IPFS storage for project metadata
+    // 1. Convert project metadata to JSON
+    // 2. Upload to IPFS using a service like Pinata, Infura IPFS, or Web3.Storage
+    // 3. Get back the IPFS CID and construct the ipfs:// URI
+    
+    // For development purposes, we can create a fake IPFS URI if none is provided
+    if (!metadataUri || metadataUri.trim() === "") {
+      // Create a simple metadata JSON
+      const metadata = {
+        title: "Project Title", // This should come from the form
+        description: "Project Description", // This should come from the form
+        timestamp: new Date().toISOString()
+      };
+      
+      // Create a mock IPFS URI with the metadata encoded in base64
+      const encodedData = Buffer.from(JSON.stringify(metadata)).toString('base64');
+      metadataUri = `ipfs://QmFake${encodedData.substring(0, 16)}`;
+    }
+    
     const contract = await getContract();
     
-    // Convert ETH to Wei
+    // Convert ETH to Wei for the blockchain
     const targetAmountWei = ethers.parseEther(targetAmount.toString());
     
+    // Call the createProject function from the Transaction contract
+    // Note: Order of arguments matters! Match the Solidity function signature
     const transaction = await contract.createProject(
+      targetAmountWei,
       totalMilestones, 
-      targetAmountWei, 
-      metadataUri,
-      {
-        from: getGlobalState("account"),
-      }
+      metadataUri
     );
     
-    await transaction.wait();
-    return [true, ""];
+    // Wait for transaction to be mined
+    const receipt = await transaction.wait();
+    
+    // After creating a project, refresh the creator token balance
+    await getFLTBalance(account);
+    
+    return [true, "Project created successfully"];
   } catch (error: unknown) {
-    console.log(error);
+    console.error("Error creating project:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
     return [false, errorMessage];
   }
@@ -292,7 +322,6 @@ export const createProject = async ({
 
 // Get all projects
 export const getProjects = async (): Promise<Project[]> => {
-
   if (USE_MOCK_DATA) {
     setGlobalState('allProjects', fakeProjects);
     return fakeProjects;
@@ -302,32 +331,64 @@ export const getProjects = async (): Promise<Project[]> => {
     const provider = new ethers.BrowserProvider(window.ethereum);
     const contract = new ethers.Contract(transactionContractAddress, transactionAbi, provider);
 
-    // Get total project count
+    // Get total project count from the contract
     const projectCount = await contract.projectCount();
     
     // Fetch all projects
     const projects: Project[] = [];
     for (let i = 1; i <= projectCount; i++) {
-      const project = await contract.projects(i);
-      projects.push({
-        id: i,
-        ...formatProject(project)
-      });
+      try {
+        // Get project data from contract
+        const project = await contract.projects(i);
+        
+        // Format project data
+        const formattedProject = {
+          id: i,
+          creator: project.creator,
+          totalMilestones: parseInt(project.totalMilestones || "0"),
+          approvedMilestones: 0, // We'll calculate this
+          targetAmount: ethers.formatEther(project.targetFunds),
+          fundsCollected: ethers.formatEther(project.totalFunds),
+          releasedFunds: "0", // Calculate based on milestones
+          campaignSuccessful: project.campaignEnded,
+          campaignClosed: project.completed,
+          cancelled: project.cancelled,
+          metadataUri: project.uri,
+          status: getProjectStatus(project),
+          progress: calculateProgress(project),
+        } as Project;
+        
+        // Fetch metadata from IPFS if possible
+        try {
+          // Convert IPFS URI to HTTP URL for gateway access
+          const ipfsGatewayUrl = project.uri.replace('ipfs://', 'https://ipfs.io/ipfs/');
+          const response = await fetch(ipfsGatewayUrl);
+          if (response.ok) {
+            const metadata = await response.json();
+            formattedProject.metadata = metadata;
+            formattedProject.title = metadata.title;
+          }
+        } catch (metadataError) {
+          console.warn(`Failed to fetch metadata for project ${i}:`, metadataError);
+          formattedProject.title = `Project ${i}`;
+        }
+        
+        projects.push(formattedProject);
+      } catch (projectError) {
+        console.warn(`Failed to fetch project ${i}:`, projectError);
+      }
     }
 
     setGlobalState('allProjects', projects);
     return projects;
   } catch (error: unknown) {
-    console.log(error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
-    window.alert(errorMessage);
+    console.error("Error fetching projects:", error);
     return [];
   }
 }
 
 // Get a single project by ID
 export const getProject = async (id: string | number): Promise<Project | null> => {
-
   if (USE_MOCK_DATA) {
     const project = fakeProjects.find(p => p.id === Number(id));
     if (project) {
@@ -341,37 +402,57 @@ export const getProject = async (id: string | number): Promise<Project | null> =
     const provider = new ethers.BrowserProvider(window.ethereum);
     const contract = new ethers.Contract(transactionContractAddress, transactionAbi, provider);
 
+    // Fetch project data from contract
     const project = await contract.projects(id);
+    
+    // Check if project exists (creator address would be 0x0 if not)
+    if (project.creator === '0x0000000000000000000000000000000000000000') {
+      return null;
+    }
+    
+    // Format project data 
     const formattedProject = {
       id: Number(id),
-      ...formatProject(project)
+      creator: project.creator,
+      totalMilestones: parseInt(project[3] || "0"), // Get milestones length
+      approvedMilestones: parseInt(project.currentMilestone || "0"),
+      targetAmount: ethers.formatEther(project.targetFunds),
+      fundsCollected: ethers.formatEther(project.totalFunds),
+      releasedFunds: calculateReleasedFunds(project),
+      campaignSuccessful: project.campaignEnded,
+      campaignClosed: project.completed,
+      cancelled: project.cancelled,
+      metadataUri: project.uri,
+      status: getProjectStatus(project),
+      progress: calculateProgress(project),
     } as Project;
 
-    // Fetch project metadata from IPFS
+    // Fetch metadata from IPFS
     try {
-      const response = await fetch(`https://ipfs.io/ipfs/${project.metadataUri.replace('ipfs://', '')}`);
+      // Convert IPFS URI to HTTP URL for gateway access
+      const ipfsGatewayUrl = project.uri.replace('ipfs://', 'https://ipfs.io/ipfs/');
+      const response = await fetch(ipfsGatewayUrl);
+      
       if (response.ok) {
         const metadata = await response.json();
-        // Add the metadata property
-        (formattedProject as any).metadata = metadata;
+        formattedProject.metadata = metadata;
+        formattedProject.title = metadata.title;
       }
     } catch (e) {
-      console.log("Error fetching metadata:", e);
+      console.warn("Error fetching project metadata:", e);
+      formattedProject.title = `Project ${id}`;
     }
 
     setGlobalState('project', formattedProject);
     return formattedProject;
   } catch (error: unknown) {
-    console.log(error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
-    window.alert(errorMessage);
+    console.error("Error fetching project:", error);
     return null;
   }
 }
 
 // Get projects created by the current user
 export const getCreatedProjects = async (address: string): Promise<Project[]> => {
-
   if (USE_MOCK_DATA) {
     // Filter the fake projects to find ones where the creator matches the provided address
     const created = fakeProjects.filter(
@@ -383,137 +464,156 @@ export const getCreatedProjects = async (address: string): Promise<Project[]> =>
   }
 
   try {
-    const allProjects = await getProjects();
-    const created = allProjects.filter(
-      project => project.creator.toLowerCase() === address.toLowerCase()
-    );
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const contract = new ethers.Contract(transactionContractAddress, transactionAbi, provider);
     
-    setGlobalState('createdProjects', created);
-    return created;
+    // Check if user has any creator tokens, which indicates they're a creator
+    const fltContract = new ethers.Contract(fltContractAddress, fltAbi, provider);
+    const creatorTokenId = await fltContract.CREATOR_TOKEN_ID();
+    const creatorBalance = await fltContract.balanceOf(address, creatorTokenId);
+    
+    // If they have no creator tokens and aren't mocking data, they may not have any projects
+    if (creatorBalance.toString() === "0" && !USE_MOCK_DATA) {
+      console.log("User has no creator tokens, they may not have created any projects");
+      // We'll still check, but log this as info
+    }
+    
+    // Get the list of project IDs created by the user
+    // We need to query one by one until we get an error or 0
+    const createdProjects: Project[] = [];
+    let index = 0;
+    
+    while (true) {
+      try {
+        const projectId = await contract.projectIds(address, index);
+        
+        // If projectId is 0, we've reached the end
+        if (projectId.toString() === "0") {
+          break;
+        }
+        
+        // Get project details
+        const project = await getProject(projectId);
+        if (project) {
+          createdProjects.push(project);
+        }
+        
+        index++;
+      } catch (e) {
+        // We've reached the end of the array or encountered an error
+        console.log(`Finished reading projects or encountered error: ${e}`);
+        break;
+      }
+    }
+    
+    setGlobalState('createdProjects', createdProjects);
+    return createdProjects;
   } catch (error: unknown) {
-    console.log(error);
+    console.error("Error fetching created projects:", error);
     return [];
   }
 }
 
 // Get projects contributed to by current user
-export const getContributedProjects = async (address: string): Promise<ContributedProject[]> => {
-  try {
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    const contract = new ethers.Contract(transactionContractAddress, transactionAbi, provider);
+// export const getContributedProjects = async (address: string): Promise<ContributedProject[]> => {
+//   if (USE_MOCK_DATA) {
+//     // Mock implementation for contributed projects
+//     return fakeProjects.map(p => ({
+//       ...p,
+//       contributedAmount: "1.0" // Mock contribution amount
+//     }));
+//   }
+  
+//   try {
+//     const provider = new ethers.BrowserProvider(window.ethereum);
+//     const contract = new ethers.Contract(transactionContractAddress, transactionAbi, provider);
     
-    const allProjects = await getProjects();
-    const contributedProjects: ContributedProject[] = [];
+//     // Get all projects first
+//     const allProjects = await getProjects();
+//     const contributedProjects: ContributedProject[] = [];
     
-    // Check each project for user contributions
-    for (const project of allProjects) {
-      const contribution = await contract.contributions(project.id, address);
-      if (BigInt(contribution) > 0) {
-        contributedProjects.push({
-          ...project,
-          contributedAmount: ethers.formatEther(contribution)
-        });
-      }
-    }
+//     // Check each project for contributions by the user
+//     for (const project of allProjects) {
+//       try {
+//         // Query the contributions mapping for this project and user
+//         // Note: This is a direct storage access which may not work in all contracts
+//         // The contract would ideally have a function to query contributions
+        
+//         // Since we can't directly access mappings inside mappings in the contract,
+//         // we'd need a helper function in the contract like getContribution(projectId, address)
+        
+//         // For now, we'll use events to determine contributions
+//         // This is not optimal but works as a fallback
+        
+//         const filter = contract.filters.ContributionReceived(project.id, address);
+//         const events = await contract.queryFilter(filter);
+        
+//         if (events.length > 0) {
+//           // Calculate total contribution from events
+//           let totalContribution = ethers.parseEther("0");
+          
+//           for (const event of events) {
+//             const { value } = event.args;
+//             totalContribution += value;
+//           }
+          
+//           contributedProjects.push({
+//             ...project,
+//             contributedAmount: ethers.formatEther(totalContribution)
+//           });
+//         }
+//       } catch (e) {
+//         console.warn(`Error checking contributions for project ${project.id}:`, e);
+//       }
+//     }
     
-    setGlobalState('contributedProjects', contributedProjects);
-    return contributedProjects;
-  } catch (error: unknown) {
-    console.log(error);
-    return [];
-  }
-}
-
-// Get contributions for a project
-export const getContributions = async (projectId: string | number): Promise<Contribution[]> => {
-  try {
-    // This is a simplified version. In a real app, you'd need an event listener or indexer
-    // to track all contributions since the contract doesn't provide a direct way to get all contributors
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    const contract = new ethers.Contract(transactionContractAddress, transactionAbi, provider);
-    
-    // For demo purposes, we'll check some test addresses
-    // In a real app, you'd need to get this data from contract events
-    const testAddresses = [
-      "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-      "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
-      "0x90F79bf6EB2c4f870365E785982E1f101E93b906"
-    ];
-    
-    const contributions: Contribution[] = [];
-    for (const addr of testAddresses) {
-      const amount = await contract.contributions(projectId, addr);
-      if (BigInt(amount) > 0) {
-        contributions.push({
-          user: addr,
-          amount: ethers.formatEther(amount)
-        });
-      }
-    }
-    
-    // Also check current user
-    const currentUser = getGlobalState("account");
-    if (currentUser) {
-      const amount = await contract.contributions(projectId, currentUser);
-      if (BigInt(amount) > 0 && !contributions.some(c => c.user.toLowerCase() === currentUser.toLowerCase())) {
-        contributions.push({
-          user: currentUser,
-          amount: ethers.formatEther(amount)
-        });
-      }
-    }
-    
-    setGlobalState('contributions', contributions);
-    return contributions;
-  } catch (error: unknown) {
-    console.log(error);
-    return [];
-  }
-}
+//     setGlobalState('contributedProjects', contributedProjects);
+//     return contributedProjects;
+//   } catch (error: unknown) {
+//     console.error("Error fetching contributed projects:", error);
+//     return [];
+//   }
+// }
 
 // Contribute to a project
-export const contributeToProject = async (projectId: string | number, amount: string | number): Promise<[boolean, string]> => {
-  try {
-    const account = getGlobalState("account");
-    const contract = await getContract();
-    const weiAmount = ethers.parseEther(amount.toString());
+// export const contributeToProject = async (projectId: string | number, amount: string | number): Promise<[boolean, string]> => {
+//   try {
+//     const contract = await getContract();
+//     const weiAmount = ethers.parseEther(amount.toString());
     
-    const transaction = await contract.contribute(projectId, {
-      from: account,
-      value: weiAmount
-    });
+//     // Call the contribute function with projectId and ETH value
+//     const transaction = await contract.contribute(projectId, {
+//       value: weiAmount
+//     });
     
-    await transaction.wait();
-    return [true, ""];
-  } catch (error: unknown) {
-    console.log(error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
-    return [false, errorMessage];
-  }
-}
+//     await transaction.wait();
+//     return [true, "Contribution successful"];
+//   } catch (error: unknown) {
+//     console.error("Error contributing to project:", error);
+//     const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+//     return [false, errorMessage];
+//   }
+// }
 
 // Withdraw contribution
-export const withdrawContribution = async (projectId: string | number): Promise<[boolean, string]> => {
-  try {
-    const account = getGlobalState("account");
-    const contract = await getContract();
+// export const withdrawContribution = async (projectId: string | number): Promise<[boolean, string]> => {
+//   try {
+//     const contract = await getContract();
     
-    const transaction = await contract.withdraw(projectId, {
-      from: account
-    });
+//     // Call the withdraw function with projectId
+//     const transaction = await contract.withdraw(projectId);
     
-    await transaction.wait();
-    return [true, ""];
-  } catch (error: unknown) {
-    console.log(error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
-    return [false, errorMessage];
-  }
-}
+//     await transaction.wait();
+//     return [true, "Withdrawal successful"];
+//   } catch (error: unknown) {
+//     console.error("Error withdrawing contribution:", error);
+//     const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+//     return [false, errorMessage];
+//   }
+// }
 
 // Cancel project (for creator)
 export const cancelProject = async (projectId: string | number): Promise<[boolean, string]> => {
-  
   if (USE_MOCK_DATA) {
     const projectIndex = fakeProjects.findIndex(p => p.id === Number(projectId));
     if (projectIndex !== -1) {
@@ -525,91 +625,194 @@ export const cancelProject = async (projectId: string | number): Promise<[boolea
       };
       
       setGlobalState('allProjects', fakeProjects);
-      return [true, ""];
+      return [true, "Project cancelled successfully"];
     }
     return [false, "Project not found"];
   }
 
   try {
+    // Check if user is blacklisted
     const account = getGlobalState("account");
+    const isBlacklisted = getGlobalState("isBlacklisted");
+    
+    if (isBlacklisted) {
+      return [false, "Your account has been blacklisted and cannot perform this action"];
+    }
+    
+    // Get the project to check if the current user is the creator
+    const project = await getProject(projectId);
+    if (!project) {
+      return [false, "Project not found"];
+    }
+    
+    // Verify the current user is the project creator
+    if (project.creator.toLowerCase() !== account.toLowerCase()) {
+      return [false, "Only the project creator can cancel this project"];
+    }
+    
     const contract = await getContract();
     
-    const transaction = await contract.cancelProject(projectId, {
-      from: account
-    });
+    // Call the cancelProject function with projectId
+    const transaction = await contract.cancelProject(projectId);
     
-    await transaction.wait();
-    return [true, ""];
+    // Wait for the transaction to be mined
+    const receipt = await transaction.wait();
+    
+    // Important: The cancellation will burn creator FLT tokens as penalty
+    // So refresh the FLT balance after cancellation
+    await getFLTBalance(account);
+    
+    return [true, "Project cancelled successfully. Note: FLT tokens have been deducted as penalty."];
   } catch (error: unknown) {
-    console.log(error);
+    console.error("Error cancelling project:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
     return [false, errorMessage];
   }
 }
 
-// Release milestone (for governance/owner)
-export const releaseMilestone = async (projectId: string | number, milestoneMetadataUri: string): Promise<[boolean, string]> => {
+// Submit milestone (for creator)
+export const submitMilestone = async (projectId: string | number, milestoneUri: string): Promise<[boolean, string]> => {
   try {
+    // Check if user is blacklisted
     const account = getGlobalState("account");
+    const isBlacklisted = getGlobalState("isBlacklisted");
+    
+    if (isBlacklisted) {
+      return [false, "Your account has been blacklisted and cannot perform this action"];
+    }
+    
+    // Get the project to check if the current user is the creator
+    const project = await getProject(projectId);
+    if (!project) {
+      return [false, "Project not found"];
+    }
+    
+    // Verify the current user is the project creator
+    if (project.creator.toLowerCase() !== account.toLowerCase()) {
+      return [false, "Only the project creator can submit milestones for this project"];
+    }
+    
+    // TODO: Implement IPFS storage for milestone data
+    // 1. Convert milestone data to JSON
+    // 2. Upload to IPFS
+    // 3. Get IPFS URI
+    
+    // For development purposes, we can create a fake IPFS URI if none is provided
+    if (!milestoneUri || milestoneUri.trim() === "") {
+      // Create a simple metadata JSON
+      const metadata = {
+        title: `Milestone ${project.approvedMilestones + 1}`,
+        description: "Milestone Description",
+        timestamp: new Date().toISOString(),
+        projectId: projectId.toString()
+      };
+      
+      // Create a mock IPFS URI with the metadata encoded in base64
+      const encodedData = Buffer.from(JSON.stringify(metadata)).toString('base64');
+      milestoneUri = `ipfs://QmMilestoneFake${encodedData.substring(0, 16)}`;
+    }
+    
     const contract = await getContract();
     
-    const transaction = await contract.releaseMilestone(
-      projectId, 
-      milestoneMetadataUri,
-      {
-        from: account
-      }
-    );
+    // Call the submitMilestone function with projectId and URI
+    const transaction = await contract.submitMilestone(projectId, milestoneUri);
     
     await transaction.wait();
-    return [true, ""];
+    return [true, "Milestone submitted successfully. It is now awaiting approval by the platform."];
   } catch (error: unknown) {
-    console.log(error);
+    console.error("Error submitting milestone:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
     return [false, errorMessage];
   }
 }
 
-// Mark milestone as failed (for governance/owner)
-export const markMilestoneFailed = async (projectId: string | number): Promise<[boolean, string]> => {
+// Release milestone (for governance)
+export const releaseMilestone = async (projectId: string | number, milestoneUri: string = ""): Promise<[boolean, string]> => {
   try {
+    // Check if user has governance role
     const account = getGlobalState("account");
+    const isOwner = getGlobalState("isOwner");
+    
+    if (!isOwner) {
+      return [false, "Only platform administrators can release milestones"];
+    }
+    
     const contract = await getContract();
     
-    const transaction = await contract.markMilestoneFailed(
-      projectId,
-      {
-        from: account
-      }
-    );
+    // Call the releaseMilestone function with projectId
+    const transaction = await contract.releaseMilestone(projectId);
     
-    await transaction.wait();
-    return [true, ""];
+    // Wait for the transaction to be mined
+    const receipt = await transaction.wait();
+    
+    // After releasing a milestone, the creator receives FLT tokens as reward
+    // The project funds are also released to the creator
+    
+    // Get the project to identify the creator
+    const project = await getProject(projectId);
+    if (project && project.creator) {
+      // Refresh the creator's FLT balance
+      await getFLTBalance(project.creator);
+    }
+    
+    return [true, "Milestone released successfully. Funds have been transferred to the creator and FLT tokens awarded."];
   } catch (error: unknown) {
-    console.log(error);
+    console.error("Error releasing milestone:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
     return [false, errorMessage];
   }
 }
 
-// Helper to format project data from contract
-function formatProject(project: any): Omit<Project, 'id'> {
-  return {
-    creator: project.creator,
-    totalMilestones: project.totalMilestones.toNumber(),
-    approvedMilestones: project.approvedMilestones.toNumber(),
-    targetAmount: ethers.formatEther(project.targetAmount),
-    fundsCollected: ethers.formatEther(project.fundsCollected),
-    releasedFunds: ethers.formatEther(project.releasedFunds),
-    campaignSuccessful: project.campaignSuccessful,
-    campaignClosed: project.campaignClosed,
-    cancelled: project.cancelled,
-    status: project.cancelled,
-    title: project.creator,
-    targetFunds:ethers.formatEther(project.targetAmount),
-    metadataUri: project.metadataUri,
-    progress: project.fundsCollected.gt(0) 
-      ? (project.fundsCollected.mul(100).div(project.targetAmount)).toNumber() 
-      : 0
-  };
+// Void/reject milestone (for governance)
+export const voidMilestone = async (projectId: string | number): Promise<[boolean, string]> => {
+  try {
+    const contract = await getContract();
+    
+    // Call the voidMilestone function with projectId
+    const transaction = await contract.voidMilestone(projectId);
+    
+    await transaction.wait();
+    return [true, "Milestone voided successfully"];
+  } catch (error: unknown) {
+    console.error("Error voiding milestone:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+    return [false, errorMessage];
+  }
+}
+
+// Helper function to determine project status
+function getProjectStatus(project: any): string {
+  if (project.cancelled) return "CANCELLED";
+  if (project.completed) return "COMPLETED";
+  if (project.campaignEnded) return "FUNDED";
+  return "ACTIVE";
+}
+
+// Helper function to calculate project progress
+function calculateProgress(project: any): number {
+  if (!project.targetFunds || project.targetFunds.eq(0)) return 0;
+  
+  const targetFunds = typeof project.targetFunds === 'string' 
+    ? ethers.parseEther(project.targetFunds)
+    : project.targetFunds;
+    
+  const totalFunds = typeof project.totalFunds === 'string'
+    ? ethers.parseEther(project.totalFunds)
+    : project.totalFunds;
+    
+  return Number(((totalFunds * BigInt(100)) / targetFunds).toString());
+}
+
+// Helper function to calculate released funds
+function calculateReleasedFunds(project: any): string {
+  if (!project.targetFunds || !project.currentMilestone || !project.milestones) return "0";
+  
+  const targetFunds = typeof project.targetFunds === 'string'
+    ? ethers.parseEther(project.targetFunds)
+    : project.targetFunds;
+    
+  const milestoneFund = targetFunds / BigInt(project.milestones.length);
+  const releasedFunds = milestoneFund * BigInt(project.currentMilestone);
+  
+  return ethers.formatEther(releasedFunds);
 }

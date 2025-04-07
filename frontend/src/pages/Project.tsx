@@ -1,6 +1,6 @@
 import { useParams } from "react-router-dom";
 import ProjectDetails from "./ProjectDetails";
-import { getProject, getContributions } from "../utils/contractServices";
+import { getProject } from "../utils/contractServices";
 import { useState, useEffect } from "react";
 import { Project as ProjectType, Contribution } from "../types"; // Import types with alias to avoid naming conflict
 

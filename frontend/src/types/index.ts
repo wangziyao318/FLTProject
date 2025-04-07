@@ -79,6 +79,8 @@ export interface GlobalState {
   account: string;
   accountBalance: string;
   fltBalance: string;
+  creatorTokenBalance: string;
+  fanTokenBalance: string;
   active: boolean;
   allProjects: Project[];
   project: Project | null;
@@ -86,5 +88,6 @@ export interface GlobalState {
   createdProjects: Project[];
   contributedProjects: ContributedProject[];
   isOwner: boolean;
+  isBlacklisted: boolean;
   pendingMilestones: any[];
 }
