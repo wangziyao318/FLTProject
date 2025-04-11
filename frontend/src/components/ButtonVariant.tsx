@@ -1,12 +1,15 @@
 interface ButtonVariantProps {
     type: "button" | "submit" | "reset";
     text: string;
-    clickHandler: () => void;
-    style: string;
-    disabled: boolean;
+    // clickHandler: () => void;
+    clickHandler: (e: React.MouseEvent) => void;
+    style?: string;  
+    disabled?: boolean;  
+    className?: string;  
     bgColor?: string; // For backward compatibility
     hoverColor?: string; // For backward compatibility
     onClick?: () => void; // For backward compatibility
+    
   }
   
   const ButtonVariant = ({
@@ -14,7 +17,8 @@ interface ButtonVariantProps {
     text,
     clickHandler,
     style,
-    disabled,
+    disabled = false,
+    className = '',
     bgColor,
     hoverColor,
     onClick

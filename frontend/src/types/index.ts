@@ -91,3 +91,13 @@ export interface GlobalState {
   isBlacklisted: boolean;
   pendingMilestones: any[];
 }
+
+
+export interface Milestone {
+  projectId: number;
+  index: number;
+  proposalId?: number;  
+  description: string;
+  status: 'pending' | 'approved' | 'rejected'; 
+  title?: string;  
+}

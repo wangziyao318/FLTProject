@@ -2,8 +2,11 @@ import { ethers } from 'ethers'
 import { setGlobalState, getGlobalState } from './globalState'
 import TransactionArtifact from '../artifacts/contracts/Transaction.sol/Transaction.json'
 import FLTArtifact from '../artifacts/contracts/FLT.sol/FLT.json'
-import { transactionContractAddress, fltContractAddress } from '../App'
-import { Project, Contribution, ContributedProject, CreateProjectParams } from '../types'
+import { transactionContractAddress, fltContractAddress, governanceContractAddress } from '../App'
+// import { Project, Contribution, ContributedProject, CreateProjectParams } from '../types'
+import { Project, Contribution, ContributedProject, CreateProjectParams, Milestone } from '../types'
+import GovernanceArtifact from '../artifacts/contracts/Governance.sol/Governance.json';
+
 
 const transactionAbi = TransactionArtifact.abi
 const fltAbi = FLTArtifact.abi
@@ -815,4 +818,192 @@ function calculateReleasedFunds(project: any): string {
   const releasedFunds = milestoneFund * BigInt(project.currentMilestone);
   
   return ethers.formatEther(releasedFunds);
+}
+
+
+// Withdraw contribution from a project
+export const withdrawContribution = async (projectId: number): Promise<[boolean, string]> => {
+  if (USE_MOCK_DATA) {
+    return [true, "Withdrawal successful (mock)"];
+  }
+
+  try {
+    const contract = await getContract();
+    const tx = await contract.withdraw(projectId);
+    await tx.wait();
+    return [true, "Withdrawal successful"];
+  } catch (error: any) {
+    console.error("Error withdrawing:", error);
+    return [false, error.message || "Withdrawal failed"];
+  }
+};
+
+// Get all milestones available for voting
+export const getMilestonesForVoting = async (): Promise<Milestone[]> => {
+  if (USE_MOCK_DATA) {
+    return [
+      {
+        projectId: 1,
+        index: 0,
+        proposalId: 1,
+        description: "First milestone for Art Marketplace",
+        status: "pending"
+      },
+      {
+        projectId: 2,
+        index: 1,
+        proposalId: 2,
+        description: "Second milestone for DeFi Aggregator",
+        status: "pending"
+      }
+    ];
+  }
+
+  try {
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const transactionContract = new ethers.Contract(
+      transactionContractAddress,
+      transactionAbi,
+      provider
+    );
+    const governanceContract = new ethers.Contract(
+      governanceContractAddress, 
+      GovernanceArtifact.abi,
+      provider
+    );
+
+    const projectCount = await transactionContract.projectCount();
+    const milestones: Milestone[] = [];
+
+    for (let projectId = 1; projectId <= projectCount; projectId++) {
+      const project = await transactionContract.projects(projectId);
+      for (let i = 0; i < project.milestones.length; i++) {
+        const milestone = project.milestones[i];
+        if (milestone.status === 3) { // Submitted status
+          milestones.push({
+            projectId,
+            index: i,
+            proposalId: milestone.proposalId,
+            description: milestone.uri,
+            status: "pending"
+          });
+        }
+      }
+    }
+
+    return milestones;
+  } catch (error) {
+    console.error("Error fetching milestones:", error);
+    return [];
+  }
+};
+
+// Vote on a milestone proposal
+export const voteOnMilestone = async (
+  proposalId: number,
+  support: number // 0 = abstain, 1 = approve, 2 = against
+): Promise<[boolean, string]> => {
+  if (USE_MOCK_DATA) {
+    return [true, `Vote recorded (mock): ${['abstain', 'approve', 'against'][support]}`];
+  }
+
+  try {
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    const governanceContract = new ethers.Contract(
+      governanceContractAddress,
+      GovernanceArtifact.abi,
+      signer
+    );
+
+    const tx = await governanceContract.castVote(proposalId, support);
+    await tx.wait();
+    
+    return [true, "Vote recorded successfully"];
+  } catch (error: any) {
+    console.error("Error voting:", error);
+    return [false, error.message || "Voting failed"];
+  }
+};
+
+// Check if user has voted on a proposal
+export const hasVotedOnProposal = async (proposalId: number, account: string): Promise<boolean> => {
+  if (USE_MOCK_DATA) {
+    return false;
+  }
+
+  try {
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const governanceContract = new ethers.Contract(
+      governanceContractAddress,
+      GovernanceArtifact.abi,
+      provider
+    );
+
+    return await governanceContract.hasVoted(proposalId, account);
+  } catch (error) {
+    console.error("Error checking vote status:", error);
+    return false;
+  }
+};
+
+export const getMilestones = async (): Promise<Milestone[]> => {
+  if (USE_MOCK_DATA) {
+    return fakeProjects.flatMap(project => 
+      project.metadata?.milestones?.map((m, index) => ({
+        projectId: project.id,
+        index,
+        proposalId: index + 1, // 模拟 proposalId
+        description: m.description,
+        status: index < project.approvedMilestones ? 'approved' : 'pending',
+        title: m.title || `Milestone ${index + 1}`
+      })) || []
+    );
+  }
+
+  try {
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const contract = new ethers.Contract(
+      transactionContractAddress,
+      transactionAbi,
+      provider
+    );
+
+    const projectCount = await contract.projectCount();
+    const allMilestones: Milestone[] = [];
+
+    for (let projectId = 1; projectId <= projectCount; projectId++) {
+      const project = await contract.projects(projectId);
+      for (let i = 0; i < project.milestones.length; i++) {
+        const milestone = project.milestones[i];
+        allMilestones.push({
+          projectId,
+          index: i,
+          proposalId: milestone.proposalId || 0,
+          description: milestone.uri,
+          status: getMilestoneStatus(milestone.status),
+          title: `Milestone ${i + 1}`
+        });
+      }
+    }
+
+    return allMilestones;
+  } catch (error) {
+    console.error("Error fetching milestones:", error);
+    return [];
+  }
+};
+
+
+
+// Helper function to convert numeric status to string
+function getMilestoneStatus(status: number): 'pending' | 'approved' | 'rejected' {
+  switch(status) {
+    case 0: return 'pending';
+    case 1: return 'approved';
+    case 2: return 'rejected';
+    default: 
+      console.warn(`Unknown milestone status: ${status}`);
+      return 'pending';
+  }
 }

@@ -5,6 +5,7 @@ import ProfileButton from './ProfileButton'
 import CreateProjectButton from './CreateProjectButton'
 import { useGlobalState } from '../utils/globalState'
 import { formatAddress } from '../utils/helpers'
+import { fanProjectsPath } from './RouteConstants' // 导入fanProjectsPath
 
 const Header = () => {
   const [account] = useGlobalState('account')
@@ -18,13 +19,21 @@ const Header = () => {
       </Link>
       
       <div className="flex space-x-4">
+        {/* 添加Fan Projects链接 */}
+        <Link 
+          to={fanProjectsPath} 
+          className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition-colors"
+        >
+          Fan Projects
+        </Link>
+        
         {account && (
           <div className="flex items-center mr-4">
             <span className="text-sm font-medium mr-2">FLT Balance:</span>
             <span className="bg-gray-100 px-3 py-1 rounded-full text-sm font-bold">
               {parseFloat(fltBalance).toFixed(2)} FLT
             </span>
-            </div>
+          </div>
         )}
         
         {isOwner && (
