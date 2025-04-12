@@ -43,23 +43,29 @@ const FanProjects = () => {
   return (
     <div className="pt-20 px-4 pb-8 min-h-screen">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold mb-6">Fan Dashboard</h1>
+
+        <h1 className="font-semibold text-xl text-gray-700 text-center">
+        Fan Projects
+        </h1>
         
-        {/* Tab */}
-        <div className="flex border-b mb-6">
-          <button
-            className={`px-4 py-2 ${activeTab === 'projects' ? 'border-b-2 border-blue-500' : ''}`}
-            onClick={() => setActiveTab('projects')}
-          >
-            All Projects ({projects.length})
-          </button>
-          <button
-            className={`px-4 py-2 ${activeTab === 'milestones' ? 'border-b-2 border-blue-500' : ''}`}
-            onClick={() => setActiveTab('milestones')}
-          >
-            Milestones to Vote ({milestones.length})
-          </button>
+
+        <div className="w-full flex justify-center border-b mb-6">
+          <div className="inline-flex">
+            <button 
+              onClick={() => setActiveTab('projects')}
+              className={`px-4 py-2 ${activeTab === 'projects' ? 'border-b-2 border-blue-500' : ''}`}
+            >
+              Projects
+            </button>
+            <button 
+              onClick={() => setActiveTab('milestones')}
+              className={`px-4 py-2 ${activeTab === 'milestones' ? 'border-b-2 border-blue-500' : ''}`}
+            >
+              Milestones
+            </button>
+          </div>
         </div>
+  
 
         {/* List of projects */}
         {activeTab === 'projects' && (

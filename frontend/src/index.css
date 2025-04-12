@@ -36,7 +36,7 @@ code {
   border: 1px solid rgba(95, 156, 248, 0.3);
 }
 
-/* 添加全局光效层 */
+/* Add global light effect layer */
 #root {
   position: relative;
   isolation: isolate;
@@ -63,7 +63,7 @@ code {
   to { transform: rotate(360deg); }
 }
 
-/* 保留原有媒体查询等响应式样式 */
+/* Retain the original media query and other responsive styles */
 @media (max-width: 768px) {
   body {
     background-attachment: fixed;

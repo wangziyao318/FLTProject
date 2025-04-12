@@ -5,6 +5,7 @@ import { createProjectPath } from "./RouteConstants";
 interface AddProjectButtonProps {
     style?: string;
     disabled?: boolean;
+    className?: string;
 }
 
 const AddProjectButton = ({ 

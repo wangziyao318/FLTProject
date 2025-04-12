@@ -1,7 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import ButtonVariant from './ButtonVariant';
-import { buildProjectPath } from "./RouteConstants";
 import { formatAddress } from "../utils/helpers";
 import { Project } from "../types";
 import { ethers } from "ethers";
@@ -16,14 +14,9 @@ interface FanProjectCardProps {
 }
 
 const FanProjectCard = ({ project, account, onActionSuccess }: FanProjectCardProps) => {
-  const navigate = useNavigate();
   const [contributionAmount, setContributionAmount] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [actionType, setActionType] = useState<'contribute' | 'withdraw' | null>(null);
-
-  const routeChange = () => {
-    navigate(buildProjectPath(project.id));
-  };
 
   const handleAction = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -65,15 +58,12 @@ const FanProjectCard = ({ project, account, onActionSuccess }: FanProjectCardPro
   const isNotCreator = account && account.toLowerCase() !== project.creator.toLowerCase();
 
   return (
-    <div 
-      className="rounded-xl shadow-lg w-80 bg-gray-100 m-6 p-4 hover:cursor-pointer"
-      onClick={routeChange}
-    >
+    <div className="rounded-xl shadow-lg w-80 bg-gray-100 m-6 p-4"> 
       <div className="form-wrapper">
         <div className="project-form-container">
           <div className="form-header">
             <h1>{project.metadata?.title || `Project #${project.id}`}</h1>
-            <p className="text-sm text-gray-600">
+            <p className="field-label">
               Creator: {formatAddress(project.creator)}
             </p>
           </div>

@@ -3,7 +3,6 @@ import { setGlobalState, getGlobalState } from './globalState'
 import TransactionArtifact from '../artifacts/contracts/Transaction.sol/Transaction.json'
 import FLTArtifact from '../artifacts/contracts/FLT.sol/FLT.json'
 import { transactionContractAddress, fltContractAddress, governanceContractAddress } from '../App'
-// import { Project, Contribution, ContributedProject, CreateProjectParams } from '../types'
 import { Project, Contribution, ContributedProject, CreateProjectParams, Milestone } from '../types'
 import GovernanceArtifact from '../artifacts/contracts/Governance.sol/Governance.json';
 
@@ -821,7 +820,7 @@ function calculateReleasedFunds(project: any): string {
 }
 
 
-// Withdraw contribution from a project
+// Withdraw contribution from a project (for fans)
 export const withdrawContribution = async (projectId: number): Promise<[boolean, string]> => {
   if (USE_MOCK_DATA) {
     return [true, "Withdrawal successful (mock)"];
@@ -898,7 +897,7 @@ export const getMilestonesForVoting = async (): Promise<Milestone[]> => {
   }
 };
 
-// Vote on a milestone proposal
+// Vote on a milestone proposal (for fans)
 export const voteOnMilestone = async (
   proposalId: number,
   support: number // 0 = abstain, 1 = approve, 2 = against
@@ -953,7 +952,7 @@ export const getMilestones = async (): Promise<Milestone[]> => {
       project.metadata?.milestones?.map((m, index) => ({
         projectId: project.id,
         index,
-        proposalId: index + 1, // 模拟 proposalId
+        proposalId: index + 1, //simulate propose id
         description: m.description,
         status: index < project.approvedMilestones ? 'approved' : 'pending',
         title: m.title || `Milestone ${index + 1}`

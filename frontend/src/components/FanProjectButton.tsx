@@ -1,30 +1,29 @@
 import ButtonVariant from "./ButtonVariant";
 import { useNavigate } from "react-router-dom";
-import { userProfilePath } from "./RouteConstants";
+import { fanProjectsPath } from "./RouteConstants";
 
-interface ProfileButtonProps {
-    address?: string;
+interface FanProjectButtonProps {
     disabled?: boolean;
     style?: string;
     className?: string;
 }
 
-const ProfileButton = ({disabled = false, style = "bg-blue-500 hover:bg-blue-600"}: ProfileButtonProps) => {
+const FanProjectButton = ({disabled = false, style = "bg-green-500 hover:bg-green-600"}: FanProjectButtonProps) => {
     const navigate = useNavigate();
 
     const routeChange = () => {
-        navigate(userProfilePath)
+        navigate(fanProjectsPath);
     };
 
     return (
         <ButtonVariant 
             type="button" 
-            text="My Profile" 
+            text="Fan Projects" 
             disabled={disabled} 
             clickHandler={routeChange}
             style={style}
         />
-    )
-}
+    );
+};
 
-export default ProfileButton;
+export default FanProjectButton;
