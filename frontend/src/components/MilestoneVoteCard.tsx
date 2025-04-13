@@ -47,7 +47,7 @@ const MilestoneVoteCard = ({ milestone, account, onVoteSuccess }: MilestoneVoteC
   };
 
   return (
-    <div className="rounded-xl shadow-lg w-80 bg-white m-6 p-4"> {/* 修改为与ProjectCard相同的卡片样式 */}
+    <div className="rounded-xl shadow-lg w-80 bg-white m-6 p-4"> 
       <div className="form-wrapper">
         <div className="project-form-container">
           <div className="form-header">

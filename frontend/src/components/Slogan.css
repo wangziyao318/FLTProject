@@ -1,4 +1,4 @@
-/* 使用Google字体 */
+/* Use Google fonts */
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Roboto:wght@300;400&display=swap');
 
 .slogan-container {
@@ -27,7 +27,7 @@
   line-height: 1.6;
 }
 
-/* 响应式设计 */
+/* Responsive design*/
 @media (max-width: 768px) {
   .slogan-text {
     font-size: 2.5rem;

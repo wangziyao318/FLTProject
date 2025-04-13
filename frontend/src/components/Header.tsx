@@ -5,8 +5,6 @@ import ProfileButton from './ProfileButton'
 import FanProjectButton from './FanProjectButton'
 import CreateProjectButton from './CreateProjectButton'
 import { useGlobalState } from '../utils/globalState'
-// import { formatAddress } from '../utils/helpers'
-// import { fanProjectsPath } from './RouteConstants'
 
 const Header = () => {
   const [account] = useGlobalState('account')

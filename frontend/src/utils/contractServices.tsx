@@ -946,6 +946,8 @@ export const hasVotedOnProposal = async (proposalId: number, account: string): P
   }
 };
 
+
+// Get all milestones for a project
 export const getMilestones = async (): Promise<Milestone[]> => {
   if (USE_MOCK_DATA) {
     return fakeProjects.flatMap(project => 
