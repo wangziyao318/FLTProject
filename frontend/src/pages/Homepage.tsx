@@ -1,31 +1,41 @@
-import { useEffect } from 'react';
-import Slogan from '../components/Slogan';
-import AllProjects from "../components/AllProjects";
-import { useGlobalState } from '../utils/globalState';
-import { getProjects } from '../utils/contractServices';
-import './Homepage.css'; // Newly added CSS files
+import React, { useState } from "react";
+import ConnectButton from "../components/ConnectButton";
+import RoleTabs from "../components/RoleTabs";
 
-const Homepage = () => {
-  const [projects] = useGlobalState("allProjects");
-  const [account] = useGlobalState("account");
-  
-  useEffect(() => {
-    async function fetchData() {
-      await getProjects();
-    }
-    fetchData();
-  }, []);
-  
-  return (
-    <div className="homepage-container">
-      <Slogan 
-        text1="Fund The Future" 
-        text2="Empowering Creators with Milestone-Based Funding"
-      />
-      
-      <AllProjects projects={projects}/>
-    </div>
-  );
-}
+const HomePage = () => {
+    const [role, setRole] = useState<"creator" | "fan">("creator");
 
-export default Homepage;
+    return (
+        <div style={{ padding: "2rem" }}>
+            <h1 style={{ fontSize: "2rem", marginBottom: "1rem" }}>
+                🎨 Welcome to the Crowdfunding dApp
+            </h1>
+
+            <ConnectButton />
+            <RoleTabs role={role} setRole={setRole} />
+
+            {role === "creator" ? (
+                <div>
+                    <h2>👩‍🎨 Creator Actions</h2>
+                    <ul>
+                        <li><a href="/creator/create">Create Project</a></li>
+                        <li><a href="/creator/cancel">Cancel Project</a></li>
+                        <li><a href="/creator/submit">Submit Milestone</a></li>
+                        <li><a href="/creator/execute">Execute Proposal</a></li>
+                    </ul>
+                </div>
+            ) : (
+                <div>
+                    <h2>🧑‍💻 Fan Actions</h2>
+                    <ul>
+                        <li><a href="/fan/contribute">Contribute to Project</a></li>
+                        <li><a href="/fan/withdraw">Withdraw Contribution</a></li>
+                        <li><a href="/fan/vote">Vote on Proposal</a></li>
+                    </ul>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default HomePage;

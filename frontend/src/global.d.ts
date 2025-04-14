@@ -1,9 +1,7 @@
-// MetaMask injects window.ethereum property, but the react compiler doesn't know it unless specified here
+export {};
+
 declare global {
     interface Window {
-      ethereum?: any;
+        ethereum: import("ethers").Eip1193Provider;
     }
-  }
-  
-  export {};
-  
+}
