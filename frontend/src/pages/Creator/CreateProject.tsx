@@ -1,14 +1,13 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useWallet } from "../../contexts/WalletContext";
 import { uploadJSONToIPFS } from "../../utils/ipfs";
 import { CONTRACT_ADDRESSES } from "../../constants/contracts";
 import { Transaction__factory } from "../../typechain-types";
 import { ProjectMetadata } from "../../types/project";
+import Slogan from "components/Slogan";
 
 const CreateProject = () => {
     const { signer, address } = useWallet();
-    const navigate = useNavigate();
 
     const [metadata, setMetadata] = useState<ProjectMetadata>({
         title: "",
@@ -74,17 +73,14 @@ const CreateProject = () => {
 
     return (
         <div style={{ padding: "2rem" }}>
-            <button onClick={() => navigate("/")} style={{ marginBottom: "1rem" }}>
-                ← Back to Home
-            </button>
+            <Slogan text1="Create New Project" text2="" />
 
-            <h1>Create New Project</h1>
-
-            <form onSubmit={handleSubmit} style={{ maxWidth: 400 }}>
+            <form onSubmit={handleSubmit} style={{ maxWidth: 300, margin: "0 auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
                 <div>
                     <label>Title:</label><br />
                     <input
                         value={metadata.title}
+                        // style={{width: 400}}
                         onChange={e => handleChange("title", e.target.value)}
                         required
                     />
@@ -113,7 +109,7 @@ const CreateProject = () => {
                     <input
                         type="number"
                         value={metadata.milestones}
-                        onChange={e => handleChange("milestones", parseInt(e.target.value ?? "0"))}
+                        onChange={e => handleChange("milestones", parseInt(e.target.value ?? "1"))}
                         required
                         min={1}
                         max={255}

@@ -1,14 +1,13 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useWallet } from "../../contexts/WalletContext";
 import { Governance__factory } from "../../typechain-types";
 import { CONTRACT_ADDRESSES } from "../../constants/contracts";
-import { useNavigate } from "react-router-dom";
 import ProposalList from "../../components/ProposalList";
 import { ProposalOnChain } from "../../types/proposal";
+import Slogan from "components/Slogan";
 
 const ExecuteProposal = () => {
     const { signer } = useWallet();
-    const navigate = useNavigate();
 
     const [selected, setSelected] = useState<ProposalOnChain | null>(null);
     const [executing, setExecuting] = useState(false);
@@ -36,8 +35,7 @@ const ExecuteProposal = () => {
 
     return (
         <div style={{ padding: "2rem" }}>
-            <button onClick={() => navigate("/")}>← Back to Home</button>
-            <h1>Execute Proposal</h1>
+            <Slogan text1="Execute Proposal" text2="" />
 
             {!selected && (
                 <>

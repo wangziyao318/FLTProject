@@ -1,5 +1,4 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 import { useWallet } from "../../contexts/WalletContext";
 import ProposalList from "../../components/ProposalList";
 import { ProposalOnChain } from "../../types/proposal";
@@ -8,7 +7,6 @@ import { CONTRACT_ADDRESSES } from "../../constants/contracts";
 
 const Vote = () => {
     const { signer } = useWallet();
-    const navigate = useNavigate();
 
     const [selected, setSelected] = useState<ProposalOnChain | null>(null);
     const [support, setSupport] = useState<0 | 1 | 2 | null>(null); // 0 = abstain, 1 = for, 2 = against
@@ -38,7 +36,6 @@ const Vote = () => {
 
     return (
         <div style={{ padding: "2rem" }}>
-            <button onClick={() => navigate("/")}>← Back to Home</button>
             <h1>Vote on Proposal</h1>
 
             {!selected && (

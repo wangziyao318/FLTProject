@@ -1,14 +1,12 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useWallet } from "../../contexts/WalletContext";
 import { Transaction__factory } from "../../typechain-types";
 import { CONTRACT_ADDRESSES } from "../../constants/contracts";
-import { useNavigate } from "react-router-dom";
 import ProjectList from "../../components/ProjectList";
 import { ProjectOnChain } from "../../types/project";
 
 const Contribute = () => {
     const { signer } = useWallet();
-    const navigate = useNavigate();
 
     const [selected, setSelected] = useState<ProjectOnChain | null>(null);
     const [ethAmount, setEthAmount] = useState("");
@@ -41,7 +39,6 @@ const Contribute = () => {
 
     return (
         <div style={{ padding: "2rem" }}>
-            <button onClick={() => navigate("/")}>← Back to Home</button>
             <h1>Contribute to a Project</h1>
 
             {!selected && (

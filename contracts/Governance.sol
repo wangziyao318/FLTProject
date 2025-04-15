@@ -23,7 +23,7 @@ contract Governance is IGovernance, ReentrancyGuard {
     uint256 public constant MIN_VOTING_BALANCE = 1e18;
 
     /// @dev Minimum total votes required for a proposal to be valid
-    uint256 public constant QUORUM = 10e18;
+    uint256 public constant QUORUM = 1e18;
 
     /// @dev Total number of proposals, used as proposalId, 0 is reserved
     uint256 public proposalCount;
@@ -142,5 +142,9 @@ contract Governance is IGovernance, ReentrancyGuard {
             if (approved) transaction.releaseMilestone(proposal.projectId);
             else transaction.voidMilestone(proposal.projectId);
         }
+    }
+
+    fallback() external {
+        revert("Governance: function not implemented");
     }
 }

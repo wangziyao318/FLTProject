@@ -1,4 +1,3 @@
-import React from "react";
 import { ProjectOnChain, ProjectMetadata } from "../types/project";
 
 type Props = {
@@ -20,6 +19,7 @@ const ProjectCard = ({ project, metadata, onSelect, contribution = null }: Props
 
     return (
         <div
+            className="rounded-xl shadow-lg w-80 bg-gray-100 m-6 p-4"
             style={{
                 border: "1px solid #ccc",
                 borderRadius: "8px",

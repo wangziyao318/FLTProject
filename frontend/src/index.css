@@ -3,6 +3,7 @@
 
 body {
   margin: 0;
+  text-align: center;
   font-family: 'Rajdhani', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 
     'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
@@ -10,7 +11,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
   
   /* Enhanced version of technological sense background */
-  background: 
+  background:
     linear-gradient(62deg, #0f172a 0%, #1e293b 100%),
     repeating-linear-gradient(
       30deg,
@@ -68,4 +69,26 @@ code {
   body {
     background-attachment: fixed;
   }
+}
+
+a {
+  color: white;
+  text-decoration: none; /* optional: remove underline */
+  font-weight: normal;
+}
+
+a:hover {
+  font-weight: bold;
+}
+
+label {
+    font-size: large;
+}
+
+button {
+    font-size: large;
+}
+
+p {
+    font-size: larger;
 }

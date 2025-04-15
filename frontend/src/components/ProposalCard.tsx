@@ -1,12 +1,13 @@
-import React from "react";
 import { ProposalOnChain } from "../types/proposal";
+import { MilestoneMetadata } from "types/milestone";
 
 type Props = {
     proposal: ProposalOnChain;
+    metadata: MilestoneMetadata;
     onSelect?: (id: bigint) => void;
 };
 
-const ProposalCard = ({ proposal, onSelect }: Props) => {
+const ProposalCard = ({ proposal, metadata, onSelect }: Props) => {
     const totalVotes = proposal.forVotes + proposal.againstVotes + proposal.abstainVotes;
     const status = proposal.executed ? "✅ Executed" : "⏳ Pending";
 
@@ -23,6 +24,9 @@ const ProposalCard = ({ proposal, onSelect }: Props) => {
         >
             <h4>Proposal #{proposal.id.toString()}</h4>
             <p><strong>Project:</strong> {proposal.projectId.toString()}</p>
+            <p><strong>Milestone:</strong> {metadata.milestoneIndex}</p>
+            <p><strong>Milestone Description:</strong> {metadata.description}</p>
+            <p><strong>Milestone Submitted:</strong> {new Date(metadata.timestamp).toLocaleString()}</p>
             <p><strong>Creator:</strong> {proposal.creator}</p>
             <p><strong>Status:</strong> {status}</p>
             <p><strong>Start Block:</strong> {proposal.startBlock.toString()}</p>

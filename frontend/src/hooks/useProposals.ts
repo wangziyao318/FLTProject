@@ -3,10 +3,12 @@ import { useWallet } from "../contexts/WalletContext";
 import { Transaction__factory, Governance__factory } from "../typechain-types";
 import { CONTRACT_ADDRESSES } from "../constants/contracts";
 import { ProposalOnChain } from "../types/proposal";
+import { downloadJSONFromIPFS } from "../utils/ipfs";
+import { MilestoneMetadata } from "types/milestone";
 
 export function useProposals(ownedOnly = false) {
     const { provider, address } = useWallet();
-    const [proposals, setProposals] = useState<ProposalOnChain[]>([]);
+    const [proposals, setProposals] = useState<{proposal:ProposalOnChain; metadata: MilestoneMetadata}[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -20,7 +22,7 @@ export function useProposals(ownedOnly = false) {
             try {
                 const tx = Transaction__factory.connect(CONTRACT_ADDRESSES.Transaction, provider);
                 const gov = Governance__factory.connect(CONTRACT_ADDRESSES.Governance, provider);
-                const result: ProposalOnChain[] = [];
+                const results: {proposal:ProposalOnChain; metadata: MilestoneMetadata}[] = [];
 
                 const projectIds: bigint[] = [];
 
@@ -32,35 +34,46 @@ export function useProposals(ownedOnly = false) {
                     }
                 } else {
                     const total = await tx.projectCount();
-                    for (let i = 0n; i < total; i++) {
+                    for (let i = 1n; i <= total; i++) { // id=0 reserved
                         projectIds.push(i);
                     }
                 }
 
                 for (const projectId of projectIds) {
                     const project = await tx.projects(projectId);
-                    const milestone = await tx.getMilestone(projectId, project.currentMilestone);
+                    let milestone = null;
+                    try {
+                        milestone = await tx.getMilestone(projectId, project.currentMilestone);
+                    } catch (err) {
+                        continue;
+                    }
+                    
                     const proposalId = milestone.proposalId;
 
                     if (proposalId === 0n) continue;
+                    if (milestone.status !== 3n) continue;
 
-                    const proposal = await gov.proposals(proposalId);
+                    const rawProposal = await gov.proposals(proposalId);
+                    const metadata = await downloadJSONFromIPFS<MilestoneMetadata>(milestone.uri);
 
-                    result.push({
-                        id: proposalId,
-                        projectId: proposal.projectId,
-                        creator: proposal.creator,
-                        startBlock: proposal.startBlock,
-                        endBlock: proposal.endBlock,
-                        abstainVotes: proposal.abstainVotes,
-                        forVotes: proposal.forVotes,
-                        againstVotes: proposal.againstVotes,
-                        executed: proposal.executed,
-                        uri: proposal.uri,
+                    results.push({
+                        proposal: {
+                            id: proposalId,
+                            projectId: rawProposal.projectId,
+                            creator: rawProposal.creator,
+                            startBlock: rawProposal.startBlock,
+                            endBlock: rawProposal.endBlock,
+                            abstainVotes: rawProposal.abstainVotes,
+                            forVotes: rawProposal.forVotes,
+                            againstVotes: rawProposal.againstVotes,
+                            executed: rawProposal.executed,
+                            uri: rawProposal.uri,
+                        },
+                        metadata: metadata
                     });
                 }
 
-                setProposals(result);
+                setProposals(results);
             } catch (err: any) {
                 console.error(err);
                 setError(err.message || "Failed to fetch proposals");

@@ -1,5 +1,5 @@
 import React from 'react';
-import './Slogan.css'; // 可以单独创建Slogan的样式文件
+import './Slogan.css';
 
 interface SloganProps {
   text1: string;

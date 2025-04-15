@@ -225,7 +225,7 @@ contract Transaction is ITransaction, ReentrancyGuard {
         emit ContributionReceived(projectId, msg.sender, contribution);
 
         /// @dev Mint 1:1 FLT tokens to fan
-        flt.mint(msg.sender, msg.value, false);
+        flt.mint(msg.sender, contribution, false);
 
         /// @dev Close campaign if the funding target is met
         if (proj.totalFunds >= proj.targetFunds) {
@@ -246,6 +246,7 @@ contract Transaction is ITransaction, ReentrancyGuard {
         require(success, "ETH transfer failed");
 
         proj.contributions[msg.sender] = 0;
+        proj.totalFunds -= contributed;
         
         /// @dev Also remove contributor
         uint256 len = proj.contributors.length;
@@ -298,9 +299,8 @@ contract Transaction is ITransaction, ReentrancyGuard {
 
         emit MilestoneReleased(projectId, proj.currentMilestone, milestoneFunds);
 
-        if (proj.milestones.length > proj.currentMilestone)
-            proj.currentMilestone += 1;
-        else
+        proj.currentMilestone += 1;
+        if (proj.milestones.length <= proj.currentMilestone)
             proj.completed = true;
         
         /// @dev Mint creator's FLT as reward to project creator
@@ -320,9 +320,8 @@ contract Transaction is ITransaction, ReentrancyGuard {
         /// @dev Reject the current milestone
         proj.milestones[proj.currentMilestone].status = 2;
 
-        if (proj.milestones.length > proj.currentMilestone)
-            proj.currentMilestone += 1;
-        else
+        proj.currentMilestone += 1;
+        if (proj.milestones.length <= proj.currentMilestone)
             proj.completed = true;
         
         /// @dev Burn creator's FLT as penalty, blacklist when needed
@@ -343,4 +342,8 @@ contract Transaction is ITransaction, ReentrancyGuard {
 
     /// @dev Allow the contract to receive ETH
     receive() external payable {}
+
+    fallback() external {
+        revert("Transaction: function not implemented");
+    }
 }

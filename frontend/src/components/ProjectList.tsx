@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import { useProjects } from "../hooks/useProjects";
 import { useContribution } from "../hooks/useContributions";
 import ProjectCard from "./ProjectCard";

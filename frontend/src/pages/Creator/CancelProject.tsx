@@ -1,14 +1,13 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useWallet } from "../../contexts/WalletContext";
 import { Transaction__factory } from "../../typechain-types";
 import { CONTRACT_ADDRESSES } from "../../constants/contracts";
-import { useNavigate } from "react-router-dom";
 import ProjectList from "../../components/ProjectList";
 import { ProjectOnChain } from "../../types/project";
+import Slogan from "components/Slogan";
 
 const CancelProject = () => {
     const { signer } = useWallet();
-    const navigate = useNavigate();
 
     const [selected, setSelected] = useState<ProjectOnChain | null>(null);
     const [canceling, setCanceling] = useState(false);
@@ -37,8 +36,7 @@ const CancelProject = () => {
 
     return (
         <div style={{ padding: "2rem" }}>
-            <button onClick={() => navigate("/")}>← Back to Home</button>
-            <h1>Cancel Project</h1>
+            <Slogan text1="Cancel Project" text2=""/>
 
             {!selected && (
                 <>

@@ -7,11 +7,11 @@ import { CONTRACT_ADDRESSES } from "../../constants/contracts";
 import { ProjectOnChain } from "../../types/project";
 import ProjectCard from "../../components/ProjectCard";
 import { ProjectMetadata } from "../../types/project";
-import { useNavigate } from "react-router-dom";
+import Slogan from "components/Slogan";
+import { MilestoneMetadata } from "types/milestone";
 
 const SubmitMilestone = () => {
     const { signer, address } = useWallet();
-    const navigate = useNavigate();
     const { projects, loading } = useProjects(true); // ownedOnly=true
 
     const [selected, setSelected] = useState<{ project: ProjectOnChain; metadata: ProjectMetadata } | null>(null);
@@ -29,7 +29,7 @@ const SubmitMilestone = () => {
             setError("");
             setSuccess(false);
 
-            const metadata = {
+            const metadata:MilestoneMetadata = {
                 description,
                 creator: address,
                 projectId: selected.project.id.toString(),
@@ -54,8 +54,7 @@ const SubmitMilestone = () => {
 
     return (
         <div style={{ padding: "2rem" }}>
-            <button onClick={() => navigate("/")}>← Back to Home</button>
-            <h1>Submit Milestone</h1>
+            <Slogan text1="Submit Milestone" text2="" />
 
             {!selected && (
                 <>
@@ -78,7 +77,7 @@ const SubmitMilestone = () => {
             )}
 
             {selected && (
-                <form onSubmit={handleSubmit} style={{ maxWidth: 500 }}>
+                <form onSubmit={handleSubmit} style={{ maxWidth: 500, margin: "0 auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
                     <h2>Submit milestone for: {selected.metadata.title}</h2>
 
                     <label>Description:</label><br />

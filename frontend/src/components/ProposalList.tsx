@@ -1,4 +1,3 @@
-import React from "react";
 import { useProposals } from "../hooks/useProposals";
 import ProposalCard from "./ProposalCard";
 
@@ -18,8 +17,8 @@ const ProposalList = ({ ownedOnly = false, onSelect }: Props) => {
             {error && <p style={{ color: "red" }}>{error}</p>}
             {!loading && proposals.length === 0 && <p>No proposals found.</p>}
 
-            {proposals.map((p) => (
-                <ProposalCard key={p.id.toString()} proposal={p} onSelect={onSelect} />
+            {proposals.map(({proposal, metadata}) => (
+                <ProposalCard key={proposal.id.toString()} proposal={proposal} metadata={metadata} onSelect={onSelect} />
             ))}
         </div>
     );
