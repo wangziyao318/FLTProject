@@ -34,7 +34,8 @@ contract Transaction is ITransaction, ReentrancyGuard {
         uint256 targetFunds;
         uint256 totalFunds;
         Milestone[] milestones;
-        uint256 currentMilestone;
+        uint8 totalMilestones;
+        uint8 currentMilestone;
         bool campaignEnded;
         bool cancelled;
         bool completed;
@@ -46,7 +47,10 @@ contract Transaction is ITransaction, ReentrancyGuard {
     /// @dev projectId => Project
     mapping(uint256 => Project) public projects;
     /// @dev creator address => projectId[]
+    /// @dev in ether.js, (address, index) => projectId
     mapping(address => uint256[]) public projectIds;
+    /// @dev fan address => projectId[]
+    mapping(address => uint256[]) public contributedProjectIds;
 
     modifier notBlacklisted() {
         require(
@@ -76,11 +80,32 @@ contract Transaction is ITransaction, ReentrancyGuard {
         governance = IGovernance(_governance);
     }
 
+    // --- Public functions ---
+
+    function getProjectIdCount(address creator) external view returns (uint256) {
+        return projectIds[creator].length;
+    }
+
+    function getContributedProjectIdCount(address fan) external view returns (uint256) {
+        return contributedProjectIds[fan].length;
+    }
+
+    function getContributions(uint256 projectId, address fan) public view returns (uint256) {
+        return projects[projectId].contributions[fan];
+    }
+
+    function getMilestone(
+        uint256 projectId,
+        uint256 milestoneIndex
+    ) external view returns (Milestone memory) {
+        return projects[projectId].milestones[milestoneIndex];
+    }
+
     // --- Creator's functions: createProject(), cancelProject(), submitMilestone() ---
 
     function createProject(
         uint256 targetFunds,
-        uint256 totalMilestones,
+        uint8 totalMilestones,
         string calldata uri
     ) external override notBlacklisted nonReentrant returns (uint256) {
         require(targetFunds > 0, "Funding target must be > 0");
@@ -91,6 +116,7 @@ contract Transaction is ITransaction, ReentrancyGuard {
 
         proj.creator = msg.sender;
         proj.targetFunds = targetFunds;
+        proj.totalMilestones = totalMilestones;
         proj.uri = uri;
 
         /// @dev proj.milestones = new Milestone[](totalMilestones);
@@ -188,16 +214,18 @@ contract Transaction is ITransaction, ReentrancyGuard {
         }
 
         /// @dev Add new contributor
-        if (proj.contributions[msg.sender] == 0)
+        if (proj.contributions[msg.sender] == 0) {
             proj.contributors.push(msg.sender);
-
+            contributedProjectIds[msg.sender].push(projectId);
+        }
+        
         proj.totalFunds += contribution;
         proj.contributions[msg.sender] += contribution;
 
         emit ContributionReceived(projectId, msg.sender, contribution);
 
         /// @dev Mint 1:1 FLT tokens to fan
-        flt.mint(msg.sender, msg.value, false);
+        flt.mint(msg.sender, contribution, false);
 
         /// @dev Close campaign if the funding target is met
         if (proj.totalFunds >= proj.targetFunds) {
@@ -218,6 +246,7 @@ contract Transaction is ITransaction, ReentrancyGuard {
         require(success, "ETH transfer failed");
 
         proj.contributions[msg.sender] = 0;
+        proj.totalFunds -= contributed;
         
         /// @dev Also remove contributor
         uint256 len = proj.contributors.length;
@@ -225,6 +254,15 @@ contract Transaction is ITransaction, ReentrancyGuard {
             if (proj.contributors[i] == msg.sender) {
                 proj.contributors[i] = proj.contributors[len - 1];
                 proj.contributors.pop();
+                break;
+            }
+        }
+        uint256[] storage projIds = contributedProjectIds[msg.sender];
+        len = projIds.length;
+        for (uint256 i = 0; i < len; ++i) {
+            if (projIds[i] == projectId) {
+                projIds[i] = projIds[len - 1];
+                projIds.pop();
                 break;
             }
         }
@@ -261,9 +299,8 @@ contract Transaction is ITransaction, ReentrancyGuard {
 
         emit MilestoneReleased(projectId, proj.currentMilestone, milestoneFunds);
 
-        if (proj.milestones.length > proj.currentMilestone)
-            proj.currentMilestone += 1;
-        else
+        proj.currentMilestone += 1;
+        if (proj.milestones.length <= proj.currentMilestone)
             proj.completed = true;
         
         /// @dev Mint creator's FLT as reward to project creator
@@ -283,9 +320,8 @@ contract Transaction is ITransaction, ReentrancyGuard {
         /// @dev Reject the current milestone
         proj.milestones[proj.currentMilestone].status = 2;
 
-        if (proj.milestones.length > proj.currentMilestone)
-            proj.currentMilestone += 1;
-        else
+        proj.currentMilestone += 1;
+        if (proj.milestones.length <= proj.currentMilestone)
             proj.completed = true;
         
         /// @dev Burn creator's FLT as penalty, blacklist when needed
@@ -306,4 +342,8 @@ contract Transaction is ITransaction, ReentrancyGuard {
 
     /// @dev Allow the contract to receive ETH
     receive() external payable {}
+
+    fallback() external {
+        revert("Transaction: function not implemented");
+    }
 }

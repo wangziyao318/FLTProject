@@ -1,69 +1,72 @@
-import { Link } from 'react-router-dom'
-import { connectWallet } from '../utils/contractServices'
-import ButtonVariant from './ButtonVariant'
-import ProfileButton from './ProfileButton'
-import FanProjectButton from './FanProjectButton'
-import CreateProjectButton from './CreateProjectButton'
-import { useGlobalState } from '../utils/globalState'
+import { useEffect, useState } from "react";
+import { useWallet } from "../contexts/WalletContext";
+import { FLT__factory } from "../typechain-types";
+import { CONTRACT_ADDRESSES } from "../constants/contracts";
+import { formatEther } from "ethers";
+import { useNavigate } from "react-router-dom";
 
 const Header = () => {
-  const [account] = useGlobalState('account')
-  const [fltBalance] = useGlobalState('fltBalance')
-  const [isOwner] = useGlobalState('isOwner')
+    const navigate = useNavigate();
 
-  return (
-    <header className="flex justify-between items-center p-5 bg-gray-800 shadow-lg fixed top-0 left-0 right-0 z-10">
-      <Link to="/" className="header-link">
-        <span>Home Page</span>
-      </Link>
-      
-      <div className="flex items-center space-x-4"> 
+    const { address, provider, connect, disconnect } = useWallet();
+    const [ethBalance, setEthBalance] = useState<string | null>(null);
+    const [creatorFltBalance, setCreatorFltBalance] = useState<string | null>(null);
+    const [fanFltBalance, setFanFltBalance] = useState<string | null>(null);
+    const [isBlacklisted, setIsBlacklisted] = useState(false);
 
+    useEffect(() => {
+        const fetchBalances = async () => {
+            if (!address || !provider) return;
 
-        {account && (
-          <div className="flex items-center mr-4">
-            <span className="text-sm text-gray-300 mr-2">FLT Balance:</span>
-            <span className="bg-gray-700 text-white px-3 py-1 rounded-full text-sm font-bold">
-              {parseFloat(fltBalance).toFixed(2)} FLT
-            </span>
-          </div>
-        )}
-        
-        {isOwner && (
-          <Link 
-            to="/governance" 
-            className="bg-purple-500 text-white px-4 py-2 rounded-md hover:bg-purple-600 transition-colors font-medium"
-          >
-            Governance
-          </Link>
-        )}
-        
-        {account ? (
-          <>
-            <FanProjectButton 
-              style="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md font-medium transition-colors" 
-              disabled={false} />
-            <CreateProjectButton 
-              style="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md font-medium transition-colors" 
-              disabled={false} 
-            />
-            <ProfileButton 
-              style="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md font-medium transition-colors" 
-              disabled={false} 
-            />
-          </>
-        ) : (
-          <ButtonVariant 
-            type="button"
-            text="Connect Wallet" 
-            style="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md font-medium transition-colors"
-            clickHandler={connectWallet}
-            disabled={false}
-          />
-        )}
-      </div>
-    </header>
-  )
-}
+            const balance = await provider.getBalance(address);
+            setEthBalance(formatEther(balance));
 
-export default Header
+            const flt = FLT__factory.connect(CONTRACT_ADDRESSES.FLT, provider);
+            const creatorBalance = await flt.balanceOf(address, 0);
+            const fanBalance = await flt.balanceOf(address, 1);
+            setCreatorFltBalance(formatEther(creatorBalance));
+            setFanFltBalance(formatEther(fanBalance));
+
+            const BLACKLIST_ROLE = await flt.BLACKLIST_ROLE();
+            const blacklisted = await flt.hasRole(BLACKLIST_ROLE, address);
+            setIsBlacklisted(blacklisted);
+        };
+
+        fetchBalances();
+    }, [address, provider]);
+
+    return (
+        <header style={{
+            padding: "1rem",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            borderBottom: "1px solid #ccc"
+        }}>
+            <div style={{ fontWeight: "bold" }}>Crowdfunding Platform</div>
+            <div>
+                <button onClick={() => navigate("/")}>🏠 Home</button>
+            </div>
+            <div style={{ display: "flex", gap: "1.5rem", alignItems: "center" }}>
+                
+                {address && (
+                    <>
+                        <div>ETH: {ethBalance ? `${Number(ethBalance).toFixed(4)}` : "…"}</div>
+                        <div>CreatorFLT: {creatorFltBalance?.toString() ?? "…"}</div>
+                        <div>FanFLT: {fanFltBalance?.toString() ?? "…"}</div>
+                        <p style={{ margin: 0 }}>{isBlacklisted? <span style={{color: "red"}}>Blacklisted account:</span> : "Connected as:"} <strong>{address.slice(0, 6)}...{address.slice(-4)}</strong></p>
+                    </>
+                )}
+                <div>
+                    {address ? (
+                            <button onClick={disconnect}>🚪 Logout</button>
+                    ) : (
+                        <button onClick={connect}>💰 Connect Wallet</button>
+                    )}
+                </div>
+            </div>
+        </header>
+    );
+};
+
+export default Header;

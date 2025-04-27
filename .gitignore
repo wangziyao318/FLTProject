@@ -4,19 +4,17 @@ node_modules
 # Hardhat files
 /cache
 /artifacts
-artifacts
 
 # TypeChain files
-/typechain
 /typechain-types
-typechain-types
+/frontend/src/typechain-types
 
 # solidity-coverage files
 /coverage
 /coverage.json
 
 # Hardhat Ignition default folder for deployments against a local node
-ignition/deployments/chain-31337
+/ignition/deployments/chain-31337
 
 # Mac
 .DS_Store

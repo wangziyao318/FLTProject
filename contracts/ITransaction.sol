@@ -44,7 +44,7 @@ interface ITransaction {
      */
     function createProject(
         uint256 targetFunds,
-        uint256 totalMilestones,
+        uint8 totalMilestones,
         string calldata uri
     ) external returns (uint256);
 

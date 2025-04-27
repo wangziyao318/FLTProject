@@ -137,4 +137,12 @@ contract FLT is IFLT, ERC1155, AccessControl {
         return ERC1155.supportsInterface(interfaceId) ||
             AccessControl.supportsInterface(interfaceId);
     }
+
+    receive() external payable {
+        revert("FLT contract does not accept ETH");
+    }
+
+    fallback() external {
+        revert("FLT: function not implemented");
+    }
 }
