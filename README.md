@@ -15,8 +15,9 @@ git clone https://github.com/wangziyao318/FLTProject.git
 cd FLTProject
 npm install
 npx hardhat typechain
+npx hardhat test
 
-# Must copy instead of soft link
+# Copy instead of soft link
 cp -r typechain-types frontend/src/ 
 
 # Frontend
@@ -117,22 +118,6 @@ await governance.connect(deployer).setTransaction(transaction.getAddress());
       2. withdraw previously contributed ETH: projectId, withdraw button (only withdraw all of them)
       3. list submitted milestone of all projects
          1. vote milestone: proposalId, 3 button (abstain=0, approve=1, against=2)
-<!-- 4. IPFS -->
-
-
-## Deployment (only run once)
-
-Use hardhat ignition instead of deprecated "deploy.ts"
-
-Deploy the backend onto Ethereum sepolia test net
-
-Return an address which is used by frontend to locate the backend contracts
-
-```sh
-npx hardhat run scripts/deploy.ts --network sepolia
-```
-
-After deployment, copy address into frontend/src/constants/addresses.ts, and copy ABI into frontend/src/constants/abi.ts
 
 ## Development Deployment (localhost)
 
@@ -146,10 +131,7 @@ npx hardhat node # don't kill the terminal during all time, it's running the nod
 
 In the second terminal, deploy the contract to the localhost node
 
-Return the deployed address, can save it to frontend/src/constants/local.ts
-
 ```sh
-npx hardhat ignition reset # clear old cache
 npx hardhat ignition deploy ignition/modules/DeployModule.ts --network localhost
 ```
 
@@ -157,57 +139,11 @@ In metamask, add a custom net "Hardhat local" with RPC url "http://127.0.0.1:854
 
 Add some accounts from `npx hardhat node` output
 
-# artifacts/ and typechain-types/
+## artifacts/ and typechain-types/
 
 hardhat uses artifacts binaries and raw ABI for ignition deployment.
 
-frontend uses typechain-types for auto completion, and doesn't need the artifacts!!!
-
-```ts
-// import contract factory
-import { FLT__factory } from "../../typechain-types";
-
-const provider = new ethers.BrowserProvider(window.ethereum);
-const signer = await provider.getSigner();
-
-const flt = FLT__factory.connect("0xYourDeployedAddress", signer);
-
-// Fully typed!
-await flt.mintFanToken(userAddress, projectId);
-```
-
-# frontend connect to metamask (hooks)
-
-hooks are just functions with "useXXX" name
-
-Only call hooks at the top level (not inside loops, conditions, or nested functions)
-
-Only call hooks inside functional components or other hooks
-
-```ts
-// store a state inside a component XXX.
-const [XXX, setXXX] = useState<typeOfXXX>(initialValueofXXX);
-
-// run code after render
-useEffect(() => {}, []);
-
-// Holds a mutable reference
-const inputRef = useRef<HTMLInputElement>(null);
-
-// Caches expensive computations (optimization)
-const total = useMemo(() => expensiveCalc(data), [data]);
-
-// Memoizes a function definition to avoid unnecessary re-renders
-const onClick = useCallback(() => {
-  console.log("clicked");
-}, []);
-```
-
-contexts are like global variables that are shared across all pages
-
-use contexts to store global information like wallet connection, user auth, theme toggle, language, app settings
-
-remember in index.tsx, wrap App with context tag
+frontend uses typechain-types for auto completion, and doesn't need the artifacts
 
 ## IPFS
 
@@ -222,8 +158,3 @@ One storage space (with unique DID stored in .env) for all projects from all cre
 One CID (IPFS link) for a JSON file uploaded onto the space
 
 There's no index in the space, and someone can't guess other CIDs with a CID
-
-
-## Additional Notes
-
-functions that is onlyPlatform cannot be called by frontend, which ensures safety
